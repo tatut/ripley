@@ -74,13 +74,20 @@
     (log "HTML Element:" element "with props:" props "and" (count children) "children")
     `(do
        (out!
-        "<" ~(name element)
-        ~@(mapcat
-           (fn [[attr val]]
-             (when (not= val ::no-value)
-               [" " (name attr) "=\"" val "\""]))
-           props)
-        ">")
+        "<" ~(name element))
+       ~@(for [[attr val] props]
+           (if-let [static-value
+                    (cond
+                      (keyword? val) (name val)
+                      (string? val) val
+                      (number? val) (str val)
+                      :else nil)]
+             ;; Expand a static attribute
+             `(out! ~(str " " (name attr) "=\"" static-value "\""))
+             ;; Expand dynamic attribute (where nil removes the value)
+             `(when-let [val# ~val]
+                (out! " " ~(name attr) "=\"" (str val#) "\""))))
+       (out! ">")
        ~@(compile-children children)
        (out! "</" ~(name element) ">"))))
 
@@ -150,11 +157,13 @@
     ;; Static content
     `(out! ~(StringEscapeUtils/escapeHtml4 body))
 
-    ;; Some content: a static string or symbol reference
-    ;; or a list that evaluates to children
-    (or (symbol? body)
-        (list? body))
+    ;; Some dynamic content: symbol reference
+    (symbol? body)
     `(dyn! ~body)
+
+    ;; Function call (or some other clojure form), pass it as is
+    (list? body)
+    body
 
     :else
     (throw (ex-info (str "Can't compile to HTML: " (pr-str body))
@@ -233,10 +242,17 @@
        (optimize {'do optimize-nested-do})
        (optimize {'do optimize-adjacent-out!})))
 
-(comment
-  (with-out-str
-    (binding [*html-out* clojure.core/*out*]
-      (html [:div.main
-             [:h3 "section"]
-             [:div.second-level
-              [:ul [::for [x (range 10)] [:li {:data-idx x} "<script>" x]]]]]))))
+(defn list-item [x]
+  (html
+   [:li {:data-idx x
+         :foo "x"
+         :disabled (when (even? x) "")} "<script>" x]))
+
+(with-out-str
+  (binding [*html-out* clojure.core/*out*]
+    (html [:div.main
+           [:h3 "section"]
+           [:div.second-level
+            [:ul
+             [::for [x (range 10)]
+              (list-item x)]]]])))
