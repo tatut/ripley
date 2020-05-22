@@ -1,7 +1,12 @@
 (ns ripley.html
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.walk :as walk])
+            [clojure.walk :as walk]
+            [ripley.live.context :as context]
+            [ripley.live.protocols :as p]
+            [clojure.core.async :as async]
+            [ring.util.io :as ring-io]
+            [clojure.java.io :as io])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -15,13 +20,6 @@
 (defn dyn! [& things]
   ;; Output some dynamic part
   (.write ^java.io.Writer *html-out* (StringEscapeUtils/escapeHtml4 (str/join things))))
-
-(if (System/getenv "RIPLEY_DEBUG")
-  (defn log [& things]
-    (with-open [out (io/writer (io/file "ripley.debug") :append true)]
-      (.write out
-              (str (str/join " " things) "\n"))))
-  (defn log [& things]))
 
 (defn to-camel-case [kw]
   (str/replace (name kw)
@@ -71,7 +69,6 @@
                        {:class (str/join " " class-names)})
                      (when id
                        {:id id}))]
-    (log "HTML Element:" element "with props:" props "and" (count children) "children")
     `(do
        (out!
         "<" ~(name element))
@@ -94,7 +91,6 @@
 (defn compile-fragment [body]
   (let [[props children] (props-and-children body)
         key (get-key body)]
-    (log "Fragment with props: " props " and key " key)
     `(do
        ~@(compile-children children))))
 
@@ -130,11 +126,30 @@
                  [test (compile-html expr)])
                (partition 2 clauses))))
 
-(def compile-special {:<> compile-fragment
-                      ::for compile-for
-                      ::if compile-if
-                      ::when compile-when
-                      ::cond compile-cond})
+
+(defn compile-live
+  "Compile special :ripley.html/live element."
+  [[_ opts :as live-element]]
+  (assert (and (= 2 (count live-element))
+               (map? opts))
+          "Live element has exactly one parameter: options map")
+  (assert (contains? opts :source) "Live element must have a :source instance")
+  (assert (contains? opts :component) "Live element must have a :component function")
+  `(let [source# ~(:source opts)
+         component# ~(:component opts)
+
+         id# (p/register! context/*live-context* source# component#)]
+     (out! "<span id=\"__ripley-live-" id# "\">")
+     (when (p/immediate? source#)
+       (component# (async/<!! (p/to-channel source#))))
+     (out! "</span>")))
+
+(def compile-special {:<> #'compile-fragment
+                      ::for #'compile-for
+                      ::if #'compile-if
+                      ::when #'compile-when
+                      ::cond #'compile-cond
+                      ::live #'compile-live})
 
 (defn compile-html [body]
   (cond
@@ -242,17 +257,33 @@
        (optimize {'do optimize-nested-do})
        (optimize {'do optimize-adjacent-out!})))
 
-(defn list-item [x]
-  (html
-   [:li {:data-idx x
-         :foo "x"
-         :disabled (when (even? x) "")} "<script>" x]))
+(comment
+  (defn list-item [x]
+    (html
+     [:li {:data-idx x
+           :foo "x"
+           :disabled (when (even? x) "")} "<script>" x]))
 
-(with-out-str
-  (binding [*html-out* clojure.core/*out*]
-    (html [:div.main
-           [:h3 "section"]
-           [:div.second-level
-            [:ul
-             [::for [x (range 10)]
-              (list-item x)]]]])))
+  (with-out-str
+    (binding [*html-out* clojure.core/*out*]
+      (html [:div.main
+             [:h3 "section"]
+             [:div.second-level
+              [:ul
+               [::for [x (range 10)]
+                (list-item x)]]]]))))
+
+(defn render-response
+  "Return a ring reponse that renders HTML.
+  The function is called with HTML output bound."
+  [render-fn]
+  {:status 200
+   :headers {"Content-Type" "text/html"}
+   :body (ring-io/piped-input-stream
+          (fn [out]
+            (with-open [writer (io/writer out)]
+              (binding [*html-out* writer]
+                (try
+                  (render-fn)
+                  (catch Exception e
+                    (println "Render-response render-fn threw exception: " e)))))))})
