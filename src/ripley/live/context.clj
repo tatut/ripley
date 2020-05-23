@@ -1,14 +1,21 @@
 (ns ripley.live.context
   "Live context"
   (:require [ripley.live.protocols :as p]
-            [ripley.live.connection :as c]
             [clojure.core.async :as async :refer [go go-loop <! >! timeout]]
             [org.httpkit.server :as server]
             [ring.middleware.params :as params]
-            [cheshire.core :as cheshire]))
+            [cheshire.core :as cheshire]
+            [ring.util.io :as ring-io]
+            [clojure.java.io :as io]
+            [ripley.impl.output :refer [*html-out*]]))
 
 
 (def ^:dynamic *live-context* nil)
+(def ^:dynamic *component-id* nil)
+
+(defmacro with-component-id [id & body]
+  `(binding [*component-id* ~id]
+     ~@body))
 
 (defrecord DefaultLiveContext [state]
   p/LiveContext
@@ -16,16 +23,26 @@
     ;; context is per rendered page, so will be registrations will be called from a single thread
     (let [id (:next-id @state)]
       (swap! state
-             #(-> %
-                  (update :next-id inc)
-                  (update :components assoc id [source component])))
+             #(let [state (-> %
+                              (update :next-id inc)
+                              (update :components assoc id {:source source
+                                                            :component component
+                                                            :children #{}
+                                                            :callbacks #{}}))]
+                (if *component-id*
+                  ;; Register new component as child of if we are inside a component
+                  (update-in state [:components *component-id* :children] conj id)
+                  state)))
       id))
 
   (register-callback! [this callback]
     (let [id (str (:next-id @state))]
-      (swap! state #(-> %
-                        (update :next-id inc)
-                        (update :callbacks assoc id callback)))
+      (swap! state #(let [state (-> %
+                                    (update :next-id inc)
+                                    (update :callbacks assoc id callback))]
+                      (if *component-id*
+                        (update-in state [:components *component-id* :callbacks] conj id)
+                        state)))
       id))
 
   (deregister! [this id]
@@ -39,37 +56,43 @@
 (defn- cleanup-ctx [ctx]
   (let [{:keys [context-id components]} @(:state ctx)]
     (swap! current-live-contexts dissoc context-id)
-    (doseq [[source _comp] (vals components)]
+    (doseq [{source :source} (vals components)]
       (p/close! source))))
 
-(defn wrap-live-context [handler]
-  (fn [req]
-    (let [id (java.util.UUID/randomUUID)
-          state (atom {:next-id 0
-                       :status :not-connected
-                       :components {}
-                       :callbacks {}
-                       :context-id id})
-          ctx (->DefaultLiveContext state)]
-      (try
-        (binding [*live-context* ctx]
-          (handler req))
-        (finally
-          (println "CTX AFTER RENDER: " (pr-str ctx))
-          (when-not (zero? (:next-id @(:state ctx)))
-            ;; Some live components were rendered by the page,
-            ;; add this context as awaiting websocket.
-            (swap! current-live-contexts assoc id ctx)
-            (go
-              (<! (timeout 30000))
-              (when (= :not-connected (:status @state))
-                (println "Removing context that wasn't connected within 30 seconds")
-                (cleanup-ctx ctx)))))))))
+(defn render-with-context
+  "Return input stream that calls render-fn with a new live context bound."
+  [render-fn]
+  (println "render-with-context " render-fn)
+  (let [id (java.util.UUID/randomUUID)
+        state (atom {:next-id 0
+                     :status :not-connected
+                     :components {}
+                     :callbacks {}
+                     :context-id id})
+        ctx (->DefaultLiveContext state)]
+    (ring-io/piped-input-stream
+     (fn [out]
+       (println "inside piped-input-stream")
+       (with-open [w (io/writer out)]
+         (binding [*live-context* ctx
+                   *html-out* w]
+           (try
+             (render-fn)
+             (finally
+               (when-not (zero? (:next-id @(:state ctx)))
+                 ;; Some live components were rendered by the page,
+                 ;; add this context as awaiting websocket.
+                 (swap! current-live-contexts assoc id ctx)
+                 (go
+                   (<! (timeout 30000))
+                   (when (= :not-connected (:status @state))
+                     (println "Removing context that wasn't connected within 30 seconds")
+                     (cleanup-ctx ctx))))))))))))
 
 (defn current-context-id []
   (:context-id @(:state *live-context*)))
 
-(def with-html-out nil)
+
 
 (defn connection-handler [uri]
   (params/wrap-params
@@ -105,7 +128,7 @@
              ;; PENDING: watch for new live components
              ;; - needs to bind live context when rerendering
              ;; - how to remove old callbacks (needs to be recorded within a live component)
-             (doseq [[id [source component]] (:components @(:state ctx))
+             (doseq [[id {:keys [source component]}] (:components @(:state ctx))
                      :let [ch (p/to-channel source)]]
                (go-loop [val (<! ch)]
                  (when val
@@ -113,7 +136,7 @@
                      (server/send! channel
                                    (str id ":R:"
                                         (str
-                                         (with-html-out
-                                           (java.io.StringWriter.)
-                                           #(component val))))))
+                                         (binding [*html-out* (java.io.StringWriter.)]
+                                           (component val)
+                                           (str *html-out*))))))
                    (recur (<! ch))))))))))))

@@ -42,7 +42,7 @@
                                  (mark-complete id))}]
       label]]]))
 
-(defn todo-form []
+(defn todo-form [todos]
   (h/html
    [:form {:action "#" :on-submit "return false;"}
     [:input#new-todo {:type :text
@@ -50,7 +50,8 @@
     [:button {:on-click (js/js (fn [todo]
                                  (add-todo todos {:label todo
                                                   :complete? false}))
-                               (js/input-value :new-todo))}]]))
+                               (js/input-value :new-todo))}
+     "Add todo"]]))
 (defn todomvc [todos]
   (h/html
    [:html
@@ -61,13 +62,13 @@
       [::h/live {:source (ripley.live.atom/atom-source todos)
                  :component (partial todo-list {:mark-complete (partial mark-complete todos)
                                                 :mark-incomplete (partial mark-incomplete todos)})}]
-      (todo-form)]]]))
+      (todo-form todos)]]]))
 
 (def todomvc-routes
   (routes
-   (context/wrap-live-context
-    (GET "/" req
-         (h/render-response #(todomvc todos))))
+   (GET "/" _req
+        (println "render responce")
+        (h/render-response #(todomvc todos)))
    (context/connection-handler "/__ripley-live")))
 
 (defonce server (atom nil))

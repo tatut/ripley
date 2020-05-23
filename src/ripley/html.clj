@@ -5,14 +5,11 @@
             [ripley.live.context :as context]
             [ripley.live.protocols :as p]
             [clojure.core.async :as async]
-            [ring.util.io :as ring-io]
-            [clojure.java.io :as io]
-            [ripley.js :as js])
+            ripley.js
+            [ripley.impl.output :refer [*html-out*]])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
-
-(def ^:dynamic *html-out* nil)
 
 (defn out! [& things]
   (doseq [thing things]
@@ -162,11 +159,11 @@
   (assert (contains? opts :component) "Live element must have a :component function")
   `(let [source# ~(:source opts)
          component# ~(:component opts)
-
          id# (p/register! context/*live-context* source# component#)]
      (out! "<span id=\"__ripley-live-" id# "\">")
      (when (p/immediate? source#)
-       (component# (async/<!! (p/to-channel source#))))
+       (context/with-component-id id#
+         (component# (async/<!! (p/to-channel source#)))))
      (out! "</span>")))
 
 (def compile-special {:<> #'compile-fragment
@@ -304,22 +301,10 @@
   [render-fn]
   {:status 200
    :headers {"Content-Type" "text/html"}
-   :body (ring-io/piped-input-stream
-          (fn [out]
-            (with-open [writer (io/writer out)]
-              (binding [*html-out* writer]
-                (try
-                  (render-fn)
-                  (catch Exception e
-                    (println "Render-response render-fn threw exception: " e)))))))})
+   :body (context/render-with-context render-fn)})
 
 (defn live-client-script [path]
   (html
    [:script
     (out! (slurp (io/resource "public/live-client.js"))
           "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")]))
-
-;; FIXME: hacky way to get around circular dependency I don't care to fix for now
-(alter-var-root #'context/with-html-out
-                (constantly (fn [out func]
-                              (binding [*html-out* out] (func) out))))
