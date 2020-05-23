@@ -2,21 +2,24 @@
   "PostgreSQL todomvc storage"
   (:require [next.jdbc :as jdbc]
 
-            ;; FIXME: for now, before we have logical decoding
-            [ripley.live.poll :refer [poll-source]]
+            ;; We need to know when to query again...
+            [ripley.live.async :refer [subscribe-source publish]]
             [todomvc.protocols :as p]))
 
 (defn add-todo [ds todo]
   (jdbc/execute-one! ds ["INSERT INTO todos (label, complete) VALUES (?, ?)"
                          (:label todo)
-                         (:complete? todo)]))
+                         (:complete? todo)])
+  (publish :todo/created))
 
 
 (defn mark-complete [ds todo-id]
-  (jdbc/execute-one! ds ["UPDATE todos SET complete=true WHERE id=?" todo-id]))
+  (jdbc/execute-one! ds ["UPDATE todos SET complete=true WHERE id=?" todo-id])
+  (publish :todo/updated))
 
 (defn mark-incomplete [ds todo-id]
-  (jdbc/execute-one! ds ["UPDATE todos SET complete=false WHERE id=?" todo-id]))
+  (jdbc/execute-one! ds ["UPDATE todos SET complete=false WHERE id=?" todo-id])
+  (publish :todo/updated))
 
 (defn fetch-todos [ds]
   (mapv (fn [{:todos/keys [id label complete]}]
@@ -25,7 +28,11 @@
 
 (defrecord TodoPgStorage [ds]
   p/TodoStorage
-  (live-source [_] (poll-source 1000 #(fetch-todos ds)))
+  (live-source [_] (subscribe-source #{:todo/created :todo/updated}
+                                     (fn [_]
+                                       (println "fetching ")
+                                       (fetch-todos ds))
+                                     {:event/type :todo/created}))
   (add-todo [_ todo] (add-todo ds todo))
   (mark-complete [_ todo-id] (mark-complete ds todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete ds todo-id)))
