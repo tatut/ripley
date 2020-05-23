@@ -1,36 +1,15 @@
 (ns todomvc.main
   (:require [ripley.html :as h]
             [ripley.js :as js]
-            [ripley.live.atom :refer [atom-source]]
             [ripley.live.poll :refer [poll-source]]
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
-            [ripley.live.context :as context]))
+            [ripley.live.context :as context]
+            [todomvc.atom :as atom-storage]
+            [todomvc.pg :as pg-storage]
+            [todomvc.protocols :as p]))
 
-(def todos (atom [{:label "do this" :complete? true :id 1}
-                  {:label "and that" :complete? false :id 2}]))
 
-(defn add-todo [todos todo]
-  (swap! todos
-         (fn [todos]
-           (let [id (if (seq todos)
-                      (inc (reduce max (map :id todos)))
-                      0)]
-             (conj todos (merge todo {:id id}))))))
-
-(defn update-todo [todos id update-fn & args]
-  (swap! todos (fn [todos]
-                 (mapv (fn [todo]
-                         (if (= id (:id todo))
-                           (apply update-fn todo args)
-                           todo))
-                       todos))))
-
-(defn mark-complete [todos id]
-  (update-todo todos id assoc :complete? true))
-
-(defn mark-incomplete [todos id]
-  (update-todo todos id assoc :complete? false))
 
 (defn todo-list [{:keys [mark-complete mark-incomplete]} current-todos]
   (h/html
@@ -43,36 +22,39 @@
                                  (mark-complete id))}]
       label]]]))
 
-(defn todo-form [todos]
+(defn todo-form [storage]
   (h/html
    [:form {:action "#" :on-submit "return false;"}
     [:input#new-todo {:type :text
                       :on-change (js/js #(println "nyt se on: " %) js/change-value)}]
     [:button {:on-click (js/js (fn [todo]
-                                 (add-todo todos {:label todo
-                                                  :complete? false}))
+                                 (p/add-todo storage {:label todo
+                                                      :complete? false}))
                                (js/input-value :new-todo))}
      "Add todo"]]))
-(defn todomvc [todos]
+
+(defn todomvc [storage]
   (h/html
    [:html
     [:head]
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
-      [::h/live {:source (atom-source todos)
-                 :component (partial todo-list {:mark-complete (partial mark-complete todos)
-                                                :mark-incomplete (partial mark-incomplete todos)})}]
-      (todo-form todos)]
+      [::h/live {:source (p/live-source storage)
+                 :component (partial todo-list {:mark-complete (partial p/mark-complete storage)
+                                                :mark-incomplete (partial p/mark-incomplete storage)})}]
+      (todo-form storage)]
 
      [:footer
       "Time is now: " [::h/live {:source (poll-source 500 #(java.util.Date.))
                                  :component #(h/out! (str %))}]]]]))
 
+(def storage nil)
+
 (def todomvc-routes
   (routes
    (GET "/" _req
-        (h/render-response #(todomvc todos)))
+        (h/render-response #(todomvc storage)))
    (context/connection-handler "/__ripley-live")))
 
 (defonce server (atom nil))
@@ -86,4 +68,9 @@
            (server/run-server todomvc-routes {:port 3000}))))
 
 (defn -main [& args]
-  (restart))
+  (let [storage-type (or (first args) "atom")]
+    (println "Using storage: " storage-type)
+    (alter-var-root #'storage (constantly (case storage-type
+                                            "pg" @pg-storage/storage
+                                            "atom" @atom-storage/storage)))
+    (restart)))

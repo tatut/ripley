@@ -1,4 +1,6 @@
 {:paths ["src" "../../resources"]
  :deps {ripley {:local/root "../.."}
-        compojure {:mvn/version "1.6.1"}}
+        compojure {:mvn/version "1.6.1"}
+        org.postgresql/postgresql {:mvn/version "42.2.12"}
+        seancorfield/next.jdbc {:mvn/version "1.0.445"}}
  :aliases {:run {:main-opts ["-m" "todomvc.main"]}}}
