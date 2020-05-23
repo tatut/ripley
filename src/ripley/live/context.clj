@@ -97,12 +97,9 @@
 (defn connection-handler [uri]
   (params/wrap-params
    (fn [req]
-     (println "CONNECTION HANDLER: " (pr-str req))
-     (println uri " == " (:uri req) "? " (= uri (:uri req)))
      (when (= uri (:uri req))
        (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
              ctx (get @current-live-contexts id)]
-         (println "ID: " id "; CTX: " ctx)
          (if-not ctx
            {:status 404
             :body "No such live context"}
