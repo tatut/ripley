@@ -132,11 +132,14 @@
                      :let [ch (p/to-channel source)]]
                (go-loop [val (<! ch)]
                  (when val
-                   (try
-                     (server/send! channel
-                                   (str id ":R:"
-                                        (str
-                                         (binding [*html-out* (java.io.StringWriter.)]
-                                           (component val)
-                                           (str *html-out*))))))
+                   ;; FIXME: when rerendering this component, clear its old callbacks
+                   ;; Also clear any child components (and their callbacks) when a parent is rerendered
+                   (binding [*live-context* ctx
+                             *html-out* (java.io.StringWriter.)
+                             *component-id* id]
+                     (try
+                       (component val)
+                       (server/send! channel (str id ":R:" (str *html-out*)))
+                       (catch Exception e
+                         (println "Component render threw exception: " e))))
                    (recur (<! ch))))))))))))

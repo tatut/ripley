@@ -2,6 +2,7 @@
   (:require [ripley.html :as h]
             [ripley.js :as js]
             [ripley.live.atom :refer [atom-source]]
+            [ripley.live.poll :refer [poll-source]]
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
             [ripley.live.context :as context]))
@@ -59,10 +60,14 @@
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
-      [::h/live {:source (ripley.live.atom/atom-source todos)
+      [::h/live {:source (atom-source todos)
                  :component (partial todo-list {:mark-complete (partial mark-complete todos)
                                                 :mark-incomplete (partial mark-incomplete todos)})}]
-      (todo-form todos)]]]))
+      (todo-form todos)]
+
+     [:footer
+      "Time is now: " [::h/live {:source (poll-source 500 #(java.util.Date.))
+                                 :component #(h/out! (str %))}]]]]))
 
 (def todomvc-routes
   (routes
