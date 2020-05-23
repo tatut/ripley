@@ -1,12 +1,8 @@
 window.ripley = {
     connection: null,
-    send: function(id, event) {
-        console.log("Sending id:", id, ", event: ", event);
-        var payload = id;
-        if(event.value||false) {
-            payload += ":"+event.value;
-        }
-        this.connection.send(payload);
+    send: function(id, args) {
+        console.log("Sending id:", id, ", args: ", args);
+        this.connection.send(id+":"+JSON.stringify(args));
     },
     connect: function(path, id) {
         var l = window.location;

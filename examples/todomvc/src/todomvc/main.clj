@@ -1,5 +1,6 @@
 (ns todomvc.main
   (:require [ripley.html :as h]
+            [ripley.js :as js]
             [ripley.live.atom :refer [atom-source]]
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
@@ -9,7 +10,12 @@
                   {:label "and that" :complete? false :id 2}]))
 
 (defn add-todo [todos todo]
-  (swap! todos conj todo))
+  (swap! todos
+         (fn [todos]
+           (let [id (if (seq todos)
+                      (inc (reduce max (map :id todos)))
+                      0)]
+             (conj todos (merge todo {:id id}))))))
 
 (defn update-todo [todos id update-fn & args]
   (swap! todos (fn [todos]
@@ -36,6 +42,15 @@
                                  (mark-complete id))}]
       label]]]))
 
+(defn todo-form []
+  (h/html
+   [:form {:action "#" :on-submit "return false;"}
+    [:input#new-todo {:type :text
+                      :on-change (js/js #(println "nyt se on: " %) js/change-value)}]
+    [:button {:on-click (js/js (fn [todo]
+                                 (add-todo todos {:label todo
+                                                  :complete? false}))
+                               (js/input-value :new-todo))}]]))
 (defn todomvc [todos]
   (h/html
    [:html
@@ -43,10 +58,10 @@
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
-      [:ul
-       [::h/live {:source (ripley.live.atom/atom-source todos)
-                  :component (partial todo-list {:mark-complete (partial mark-complete todos)
-                                                 :mark-incomplete (partial mark-incomplete todos)})}]]]]]))
+      [::h/live {:source (ripley.live.atom/atom-source todos)
+                 :component (partial todo-list {:mark-complete (partial mark-complete todos)
+                                                :mark-incomplete (partial mark-incomplete todos)})}]
+      (todo-form)]]]))
 
 (def todomvc-routes
   (routes

@@ -6,7 +6,8 @@
             [ripley.live.protocols :as p]
             [clojure.core.async :as async]
             [ring.util.io :as ring-io]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [ripley.js :as js])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -57,10 +58,23 @@
 (defn- html-attr-name [attr-name]
   (str/lower-case (str/replace (name attr-name) #"-" "")))
 
+
+
 (defn register-callback [callback]
-  (if (fn? callback)
-    (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", window.event)")
-    callback))
+  (cond
+    (instance? ripley.js.JSCallback callback)
+    (str "ripley.send(" (p/register-callback! context/*live-context* (:callback-fn callback)) ","
+         "[" (str/join "," (:js-params callback)) "])")
+
+    (fn? callback)
+    (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", [])")
+
+    (string? callback)
+    callback
+
+    :else
+    (throw (ex-info "Unsupported callback value, expected callback function or string"
+                    {:unsupported-callback callback}))))
 
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
@@ -304,3 +318,8 @@
    [:script
     (out! (slurp (io/resource "public/live-client.js"))
           "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")]))
+
+;; FIXME: hacky way to get around circular dependency I don't care to fix for now
+(alter-var-root #'context/with-html-out
+                (constantly (fn [out func]
+                              (binding [*html-out* out] (func) out))))

@@ -4,7 +4,8 @@
             [ripley.live.connection :as c]
             [clojure.core.async :as async :refer [go go-loop <! >! timeout]]
             [org.httpkit.server :as server]
-            [ring.middleware.params :as params]))
+            [ring.middleware.params :as params]
+            [cheshire.core :as cheshire]))
 
 
 (def ^:dynamic *live-context* nil)
@@ -68,6 +69,8 @@
 (defn current-context-id []
   (:context-id @(:state *live-context*)))
 
+(def with-html-out nil)
+
 (defn connection-handler [uri]
   (params/wrap-params
    (fn [req]
@@ -90,7 +93,7 @@
                                                (subs data 0 idx)
                                                data)
                                           args (if (pos? idx)
-                                                 (list (subs data (inc idx)))
+                                                 (seq (cheshire/decode (subs data (inc idx))))
                                                  nil)
                                           callback (-> ctx :state deref :callbacks (get id))]
                                       (if-not callback
@@ -109,7 +112,8 @@
                    (try
                      (server/send! channel
                                    (str id ":R:"
-                                        (binding [ripley.html/*html-out* (java.io.StringWriter.)]
-                                          (component val)
-                                          (str ripley.html/*html-out*)))))
+                                        (str
+                                         (with-html-out
+                                           (java.io.StringWriter.)
+                                           #(component val))))))
                    (recur (<! ch))))))))))))
