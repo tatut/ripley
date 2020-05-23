@@ -72,7 +72,6 @@
         ctx (->DefaultLiveContext state)]
     (ring-io/piped-input-stream
      (fn [out]
-       (println "inside piped-input-stream")
        (with-open [w (io/writer out)]
          (binding [*live-context* ctx
                    *html-out* w]
