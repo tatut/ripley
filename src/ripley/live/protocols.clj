@@ -3,6 +3,7 @@
 
 (defprotocol LiveContext
   (register! [this source component] "Register new live component in this context. Must return id for component.")
+  (register-callback! [this callback] "Register new callback. Must return callback id.")
   (deregister! [this id] "Deregister a previously registered component by id. Returns nil.
 Live component should deregister once no more live updates are coming.
 When all live components on a page have been deregistered, the context and socket

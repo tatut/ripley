@@ -41,6 +41,7 @@
    [:html
     [:head]
     [:body
+     (h/live-client-script "/__ripley-live")
      [:div.todomvc
       [:ul
        [::h/live {:source (ripley.live.atom/atom-source todos)
@@ -54,6 +55,15 @@
          (h/render-response #(todomvc todos))))
    (context/connection-handler "/__ripley-live")))
 
+(defonce server (atom nil))
+
+(defn- restart []
+  (swap! server
+         (fn [old-server]
+           (when old-server
+             (old-server))
+           (println "Starting todomvc server")
+           (server/run-server todomvc-routes {:port 3000}))))
+
 (defn -main [& args]
-  (println "Starting todomvc server")
-  (server/run-server todomvc-routes {:port 3000}))
+  (restart))

@@ -51,8 +51,16 @@
 (defn compile-children [children]
   (map compile-html children))
 
-(defn get-key [body]
-  (-> body meta :key))
+(def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
+                           "onkeypress" "onkeyup" "onkeydown"})
+
+(defn- html-attr-name [attr-name]
+  (str/lower-case (str/replace (name attr-name) #"-" "")))
+
+(defn register-callback [callback]
+  (if (fn? callback)
+    (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", window.event)")
+    callback))
 
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
@@ -62,9 +70,7 @@
         class-names (element-class-names element-kw)
         id (element-id element-kw)
         [props children] (props-and-children body)
-        props (merge (when-let [k (get-key body)]
-                       {:key k})
-                     props
+        props (merge props
                      (when (seq class-names)
                        {:class (str/join " " class-names)})
                      (when id
@@ -72,7 +78,8 @@
     `(do
        (out!
         "<" ~(name element))
-       ~@(for [[attr val] props]
+       ~@(for [[attr val] props
+               :let [html-attr (html-attr-name attr)]]
            (if-let [static-value
                     (cond
                       (keyword? val) (name val)
@@ -80,17 +87,21 @@
                       (number? val) (str val)
                       :else nil)]
              ;; Expand a static attribute
-             `(out! ~(str " " (name attr) "=\"" static-value "\""))
+             `(out! ~(str " " html-attr "=\"" static-value "\""))
              ;; Expand dynamic attribute (where nil removes the value)
-             `(when-let [val# ~val]
-                (out! " " ~(name attr) "=\"" (str val#) "\""))))
+             (let [valsym (gensym "val")]
+               `(when-let [~valsym ~val]
+                  (out! " " ~html-attr "=\""
+                        ~(if (callback-attributes html-attr)
+                           `(register-callback ~valsym)
+                           `(str ~valsym))
+                        "\"")))))
        (out! ">")
        ~@(compile-children children)
        (out! "</" ~(name element) ">"))))
 
 (defn compile-fragment [body]
-  (let [[props children] (props-and-children body)
-        key (get-key body)]
+  (let [[props children] (props-and-children body)]
     `(do
        ~@(compile-children children))))
 
@@ -287,3 +298,9 @@
                   (render-fn)
                   (catch Exception e
                     (println "Render-response render-fn threw exception: " e)))))))})
+
+(defn live-client-script [path]
+  (html
+   [:script
+    (out! (slurp (io/resource "public/live-client.js"))
+          "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")]))

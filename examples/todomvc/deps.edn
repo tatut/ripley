@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "../../resources"]
  :deps {ripley {:local/root "../.."}
         compojure {:mvn/version "1.6.1"}}
  :aliases {:run {:main-opts ["-m" "todomvc.main"]}}}
