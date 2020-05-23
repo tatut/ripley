@@ -20,3 +20,33 @@ Pros:
 Cons:
 - Client browser needs constant connection to server
 - Interaction latency is limited by network conditions
+
+## Usage
+
+Using ripley is from a regular ring app is easy. You call `ripley.html/render-response` from a ring
+handler to create a response that sets up a live context.
+
+The render response takes a root component that will render the page.
+Any rendered live components are registered with the context and updates are sent to the client if
+their sources change. Use `ripley.html/html` macro to output HTML with hiccup style markup.
+
+Live components are rendered with the special `:ripley.html/live` element. The live component takes
+a source (which implements `ripley.live.protocols/Source`) and a component function. The component
+function is called with the value received from the source.
+
+```clojure
+(def counter (atom 0))
+
+(defn counter-app [counter]
+  (h/html
+    [:div
+      "Counter value: " [::h/live {:source (atom-source counter)
+                                   :component #(h/out! (str %))}]
+      [:button {:on-click #(swap! counter inc)} "increment"]
+      [:button {:on-click #(swap! counter dec)} "decrement"]]))
+```
+
+All event handling attributes (like `:on-click` or `:on-change`) are registered as callbacks
+that are sent via the websocket to the server.
+
+See more details and fully working example in the examples folder.
