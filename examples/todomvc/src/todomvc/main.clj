@@ -72,7 +72,6 @@
 (def todomvc-routes
   (routes
    (GET "/" _req
-        (println "render responce")
         (h/render-response #(todomvc todos)))
    (context/connection-handler "/__ripley-live")))
 
