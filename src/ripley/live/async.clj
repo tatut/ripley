@@ -29,8 +29,7 @@
 
      (go-loop [in (<! sub-ch)]
        (when in
-         (let [tulos (<! (async/thread (event-value-fn in)))]
-           (>! ch tulos))
+         (>! ch (<! (async/thread (event-value-fn in))))
          (recur (<! sub-ch))))
 
      (doseq [topic topics]

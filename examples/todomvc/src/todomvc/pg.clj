@@ -30,7 +30,6 @@
   p/TodoStorage
   (live-source [_] (subscribe-source #{:todo/created :todo/updated}
                                      (fn [_]
-                                       (println "fetching ")
                                        (fetch-todos ds))
                                      {:event/type :todo/created}))
   (add-todo [_ todo] (add-todo ds todo))
