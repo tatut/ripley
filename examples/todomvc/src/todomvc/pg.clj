@@ -21,6 +21,10 @@
   (jdbc/execute-one! ds ["UPDATE todos SET complete=false WHERE id=?" todo-id])
   (publish :todo/updated))
 
+(defn remove-todo [ds todo-id]
+  (jdbc/execute-one! ds ["DELETE FROM todos WHERE id=?" todo-id])
+  (publish :todo/deleted))
+
 (defn fetch-todos [ds]
   (mapv (fn [{:todos/keys [id label complete]}]
           {:id id :label label :complete? complete})
@@ -28,11 +32,12 @@
 
 (defrecord TodoPgStorage [ds]
   p/TodoStorage
-  (live-source [_] (subscribe-source #{:todo/created :todo/updated}
+  (live-source [_] (subscribe-source #{:todo/created :todo/updated :todo/deleted}
                                      (fn [_]
                                        (fetch-todos ds))
                                      {:event/type :todo/created}))
   (add-todo [_ todo] (add-todo ds todo))
+  (remove-todo [_ todo-id] (remove-todo ds todo-id))
   (mark-complete [_ todo-id] (mark-complete ds todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete ds todo-id)))
 

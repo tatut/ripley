@@ -5,11 +5,26 @@
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
             [ripley.live.context :as context]
+            [ripley.live.collection :refer [live-collection]]
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]))
 
 
+(defn todo-item [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
+  (h/html
+   [:li
+    [:input {:type :checkbox
+             :checked complete?
+             :on-change #(if complete?
+                           (mark-incomplete id)
+                           (mark-complete id))}]
+    [:span {:style {:text-decoration (if complete?
+                                       :line-through
+                                       :none)}}
+     label]
+
+    [:button {:on-click #(remove id)} "remove"]]))
 
 (defn todo-list [{:keys [mark-complete mark-incomplete]} current-todos]
   (h/html
@@ -44,13 +59,20 @@
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
-      [::h/live {:source (p/live-source storage)
+      [:ul
+       (live-collection {:source (p/live-source storage)
+                         :key :id
+                         :render (partial todo-item {:mark-complete (partial p/mark-complete storage)
+                                                     :mark-incomplete (partial p/mark-incomplete storage)
+                                                     :remove (partial p/remove-todo storage)})})]
+      #_[::h/live {:source (p/live-source storage)
+                 ;;:patch :append
                  :component (partial todo-list {:mark-complete (partial p/mark-complete storage)
                                                 :mark-incomplete (partial p/mark-incomplete storage)})}]
       (todo-form storage)]
 
      [:footer
-      "Time is now: " [::h/live {:source (poll-source 500 #(java.util.Date.))
+      "Time is now: " #_[::h/live {:source (poll-source 500 #(java.util.Date.))
                                  :component #(h/out! (str %))}]]]]))
 
 (def storage nil)

@@ -20,6 +20,7 @@ Pros:
 Cons:
 - Client browser needs constant connection to server
 - Interaction latency is limited by network conditions
+- Unsuitable for serverless cloud platforms
 
 ## Usage
 

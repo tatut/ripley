@@ -17,14 +17,14 @@ window.ripley = {
         var id = msg.data.substring(0,idx);
         var method = msg.data.substring(idx+1,idx+2);
         var content = msg.data.substring(idx+3);
-        var elt = document.getElementById("__ripley-live-"+id);
+        var elt = document.getElementById("__rl"+id);
         if(elt == null) {
                 console.error("Received content for non-existant element: ", id);
         } else {
             switch(method) {
             case "R": elt.innerHTML = content; break; // Replace
             case "A": elt.innerHTML += content; break; // Append
-            case "P": elt.innerHTML = contet + elt.innerHTML; // Prepend
+            case "P": elt.innerHTML = content + elt.innerHTML; // Prepend
             case "D": elt.parentElement.removeChild(elt); // Delete
             default: console.error("Received unrecognized patch method: ", method);
             }

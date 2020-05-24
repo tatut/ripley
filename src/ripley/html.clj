@@ -192,8 +192,9 @@
   (assert (contains? opts :component) "Live element must have a :component function")
   `(let [source# ~(:source opts)
          component# ~(:component opts)
-         id# (p/register! context/*live-context* source# component#)]
-     (out! "<span id=\"__ripley-live-" id# "\">")
+         id# (p/register! context/*live-context* source# component#
+                          ~(select-keys opts [:patch]))]
+     (out! "<span id=\"__rl" id# "\">")
      (when (p/immediate? source#)
        (context/with-component-id id#
          (component# (async/<!! (p/to-channel source#)))))

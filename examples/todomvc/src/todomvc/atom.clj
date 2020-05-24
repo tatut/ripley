@@ -28,10 +28,16 @@
 (defn mark-incomplete [todos id]
   (update-todo todos id assoc :complete? false))
 
+(defn remove-todo [todos id]
+  (swap! todos
+         (fn [todos]
+           (into [] (filter #(not= (:id %) id)) todos))))
+
 (defrecord TodoAtomStorage [todos]
   p/TodoStorage
   (live-source [_] (atom-source todos))
   (add-todo [_ todo] (add-todo todos todo))
+  (remove-todo [_ todo-id] (remove-todo todos todo-id))
   (mark-complete [_ todo-id] (mark-complete todos todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id)))
 

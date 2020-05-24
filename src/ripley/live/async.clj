@@ -57,3 +57,12 @@
           :else (throw (ex-info "Publish must be called with map containing :event/topic or a keyword topic."
                                 {:invalid-publish-value event-or-topic})))]
     (go (>! pubsub-ch event))))
+
+(defn ch->source
+  "Create source from channel"
+  ([ch] (ch->source ch true))
+  ([ch immediate?]
+   (reify p/Source
+     (to-channel [_] ch)
+     (immediate? [_] immediate?)
+     (close! [_] (async/close! ch)))))
