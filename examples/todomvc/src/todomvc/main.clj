@@ -1,14 +1,19 @@
 (ns todomvc.main
   (:require [ripley.html :as h]
             [ripley.js :as js]
+            [ripley.live.atom :refer [atom-source]]
             [ripley.live.poll :refer [poll-source]]
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
+            [org.httpkit.client :as client]
             [ripley.live.context :as context]
             [ripley.live.collection :refer [live-collection]]
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
-            [todomvc.protocols :as p]))
+            [todomvc.protocols :as p]
+            [cheshire.core :as cheshire]
+            [clojure.string :as str]
+            [clojure.core.async :as async]))
 
 
 (defn todo-item [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
@@ -41,16 +46,80 @@
                                          :none)}}
        label]]]]))
 
-(defn todo-form [storage]
+(defn mentions-popup [on-select {:keys [showing? searching? term results]}]
   (h/html
-   [:form {:action "#" :on-submit "return false;"}
-    [:input#new-todo {:type :text
-                      :on-change (js/js #(println "nyt se on: " %) js/change-value)}]
-    [:button {:on-click (js/js (fn [todo]
-                                 (p/add-todo storage {:label todo
-                                                      :complete? false}))
-                               (js/input-value :new-todo))}
-     "Add todo"]]))
+   [:div {:style {:display (if showing? :block :none)
+                  :z-index 999
+                  :position :static}}
+    [::h/when searching?
+     [:div {:style {:background-color :wheat
+                    :padding "1rem"
+                    :border "solid 1px black"}}
+      "Searching... " term]]
+    [::h/when (seq results)
+     [:div
+      [::h/for [{:keys [id login avatar_url] :as user} (take 10 results)]
+       [:div {:on-click #(on-select user)}
+        [:img {:src avatar_url :width 32 :height 32}]
+        login]]]]]))
+
+(defn- search-gh-users [txt]
+  (let [results
+        (-> "https://api.github.com/search/users"
+            (client/get {:query-params {"q" txt}})
+            deref :body
+            (cheshire/decode keyword) :items)]
+    (into []
+          (map #(select-keys % [:avatar_url :login :id]))
+          results)))
+
+(defn- update-mentions [mentions-atom ch]
+  (cond
+    (= ch "@")
+    (swap! mentions-atom assoc :showing? true)
+
+    (:showing? @mentions-atom)
+    (swap! mentions-atom
+           #(-> %
+                (update :term str ch)
+                (assoc :searching? true))))
+  (let [{term :term} @mentions-atom]
+    (when (not (str/blank? term))
+      (async/thread
+        (let [users (search-gh-users term)]
+          (println "found " (count users) " gh users")
+          (swap! mentions-atom assoc
+                 :showing? true
+                 :searching? false
+                 :results users))))))
+
+(defn todo-form [storage]
+  (let [mentions (atom {:showing? false
+                        :searching? false
+                        :term ""
+                        :results nil})
+        text (atom "")]
+    (h/html
+     [:form {:action "#" :on-submit "return false;"}
+      [::h/live
+       {:source (atom-source text)
+        :component
+        (fn [current-text]
+          (h/html
+           [:input#new-todo {:type :text
+                             :value current-text
+                             :on-key-press (js/js (partial update-mentions mentions) js/keycode-char)
+                             :on-change (js/js #(reset! text %) js/change-value)}]))}]
+      [::h/live {:source (atom-source mentions)
+                 :component (partial mentions-popup (fn [user]
+                                                      (println "selected: " user)
+                                                      (swap! mentions assoc :showing? false)))}]
+      [:button {:on-click (js/js (fn [todo]
+                                   (reset! text "")
+                                   (p/add-todo storage {:label todo
+                                                        :complete? false}))
+                                 (js/input-value :new-todo))}
+       "Add todo"]])))
 
 (defn todomvc [storage]
   (h/html
@@ -65,17 +134,13 @@
                          :render (partial todo-item {:mark-complete (partial p/mark-complete storage)
                                                      :mark-incomplete (partial p/mark-incomplete storage)
                                                      :remove (partial p/remove-todo storage)})})]
-      #_[::h/live {:source (p/live-source storage)
-                 ;;:patch :append
-                 :component (partial todo-list {:mark-complete (partial p/mark-complete storage)
-                                                :mark-incomplete (partial p/mark-incomplete storage)})}]
       (todo-form storage)]
 
      [:footer
       "Time is now: " #_[::h/live {:source (poll-source 500 #(java.util.Date.))
                                  :component #(h/out! (str %))}]]]]))
 
-(def storage nil)
+(defonce storage nil)
 
 (def todomvc-routes
   (routes

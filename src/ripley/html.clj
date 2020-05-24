@@ -185,13 +185,18 @@
 (defn compile-live
   "Compile special :ripley.html/live element."
   [[_ opts :as live-element]]
-  (assert (and (= 2 (count live-element))
-               (map? opts))
-          "Live element has exactly one parameter: options map")
-  (assert (contains? opts :source) "Live element must have a :source instance")
-  (assert (contains? opts :component) "Live element must have a :component function")
-  `(let [source# ~(:source opts)
-         component# ~(:component opts)
+  (assert (= 2 (count live-element))
+          "Live element has exactly one parameter: options map or source")
+  (when (map? opts)
+    (assert (contains? opts :source) "Live element must have a :source instance")
+    (assert (contains? opts :component) "Live element must have a :component function"))
+  `(let [source# ~(if (map? opts)
+                    (:source opts)
+                    opts)
+         component# ~(if (map? opts)
+                       (:component opts)
+                       `(fn [thing#]
+                          (out! (str thing#))))
          id# (p/register! context/*live-context* source# component#
                           ~(select-keys opts [:patch]))]
      (out! "<span id=\"__rl" id# "\">")
@@ -306,13 +311,20 @@
          form)))
    form))
 
+(defn- wrap-try [form]
+  `(try
+     ~form
+     (catch Throwable t#
+       (println "Exception in HTML rendering: " t#))))
+
 (defmacro html
   "Compile hiccup to HTML output."
   [body]
   (->> body
        compile-html
        (optimize {'do optimize-nested-do})
-       (optimize {'do optimize-adjacent-out!})))
+       (optimize {'do optimize-adjacent-out!})
+       wrap-try))
 
 (comment
   (defn list-item [x]

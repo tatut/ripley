@@ -12,6 +12,13 @@
   "JavaScript for current on-change event value"
   "window.event.target.value")
 
+(def keycode
+  "JavaScript for current event keycode"
+  "window.event.keyCode")
+
+(def keycode-char
+  "String.fromCharCode(window.event.keyCode)")
+
 (defn input-value
   "Generate JS for getting the value of an input field by id."
   [id]
