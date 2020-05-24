@@ -93,19 +93,15 @@
 
 (defn- cleanup-before-render
   "Cleanup component from context before it is rerendered.
-  This will remove stale callbacks and children."
-  [{:keys [callbacks components] :as state} id]
-  ;; FIXME: Also recursively clear any child components (and their callbacks) when a parent is rerendered
+  This will remove stale callbacks and children. Recursively cleans up child components."
+  [state id]
   (let [{child-component-ids :children
-         callback-ids :callbacks} (components id)]
-    (when (seq callback-ids)
-      (println "component " id " has " callback-ids " callbacks\nall-callbacks: " callbacks)
-      (def callbacks* callbacks)
-      (def callback-ids* callback-ids))
+         callback-ids :callbacks} (get-in state [:components id])
+        state (reduce cleanup-before-render state child-component-ids)]
     (-> state
-        (assoc :callbacks (if (seq callback-ids)
-                            (reduce dissoc callbacks callback-ids)
-                            callbacks)))))
+        (update-in [:components id] assoc :children #{} :callbacks #{})
+        (update :components #(reduce dissoc % child-component-ids))
+        (update :callbacks #(reduce dissoc % callback-ids)))))
 
 (defn connection-handler [uri]
   (params/wrap-params
