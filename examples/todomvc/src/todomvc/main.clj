@@ -13,14 +13,18 @@
 
 (defn todo-list [{:keys [mark-complete mark-incomplete]} current-todos]
   (h/html
-   [:ul
+   [:ul {:style {:margin "1rem"}}
     [::h/for [{:keys [label id complete?]} current-todos]
-     [:li [:input {:type :checkbox
-                   :checked complete?
-                   :on-change #(if complete?
-                                 (mark-incomplete id)
-                                 (mark-complete id))}]
-      label]]]))
+     [:li
+      [:input {:type :checkbox
+               :checked complete?
+               :on-change #(if complete?
+                             (mark-incomplete id)
+                             (mark-complete id))}]
+      [:span {:style {:text-decoration (if complete?
+                                         :line-through
+                                         :none)}}
+       label]]]]))
 
 (defn todo-form [storage]
   (h/html

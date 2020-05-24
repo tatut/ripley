@@ -73,6 +73,37 @@
     (throw (ex-info "Unsupported callback value, expected callback function or string"
                     {:unsupported-callback callback}))))
 
+(defn- static-form? [form symbol-whitelist]
+  (let [static (volatile! true)]
+    (walk/prewalk (fn [x]
+                    (when (and (symbol? x)
+                               (not (symbol-whitelist x)))
+                      (vreset! static false))
+                    x) form)
+    @static))
+
+(defonce garden-compile-style
+  (delay (try
+           (require 'garden.compiler)
+           (resolve 'garden.compiler/compile-style)
+           (catch Throwable t
+             (println "No garden dependency, can't compile styles")))))
+
+(defn- compile-style [style]
+  (cond
+    (string? style)
+    `(out! " style=\"" ~style "\"")
+
+    (map? style)
+    (if-let [compile-style @garden-compile-style]
+      (if (static-form? style #(str/starts-with? (name %) "garden."))
+        ;; Transform static style at compile time
+        `(out! " style=\"" ~(compile-style [style]) "\"")
+        ;; Otherwise output code that transforms at runtime
+        `(out! " style=\"" (garden.compiler/compile-style [~style]) "\""))
+      (throw (ex-info "No garden compiler found, add garden to deps to support CSS compilation"
+                      {:missing-var 'garden.compiler/compile-style})))))
+
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
   [body]
@@ -91,22 +122,24 @@
         "<" ~(name element))
        ~@(for [[attr val] props
                :let [html-attr (html-attr-name attr)]]
-           (if-let [static-value
-                    (cond
-                      (keyword? val) (name val)
-                      (string? val) val
-                      (number? val) (str val)
-                      :else nil)]
-             ;; Expand a static attribute
-             `(out! ~(str " " html-attr "=\"" static-value "\""))
-             ;; Expand dynamic attribute (where nil removes the value)
-             (let [valsym (gensym "val")]
-               `(when-let [~valsym ~val]
-                  (out! " " ~html-attr "=\""
-                        ~(if (callback-attributes html-attr)
-                           `(register-callback ~valsym)
-                           `(str ~valsym))
-                        "\"")))))
+           (if (= :style attr)
+             (compile-style val)
+             (if-let [static-value
+                      (cond
+                        (keyword? val) (name val)
+                        (string? val) val
+                        (number? val) (str val)
+                        :else nil)]
+               ;; Expand a static attribute
+               `(out! ~(str " " html-attr "=\"" static-value "\""))
+               ;; Expand dynamic attribute (where nil removes the value)
+               (let [valsym (gensym "val")]
+                 `(when-let [~valsym ~val]
+                    (out! " " ~html-attr "=\""
+                          ~(if (callback-attributes html-attr)
+                             `(register-callback ~valsym)
+                             `(str ~valsym))
+                          "\""))))))
        (out! ">")
        ~@(compile-children children)
        (out! "</" ~(name element) ">"))))
@@ -172,6 +205,7 @@
                       ::when #'compile-when
                       ::cond #'compile-cond
                       ::live #'compile-live})
+
 
 (defn compile-html [body]
   (cond
