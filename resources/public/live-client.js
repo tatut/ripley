@@ -1,16 +1,18 @@
 window.ripley = {
     connection: null,
+    debug: false,
     send: function(id, args) {
-        console.log("Sending id:", id, ", args: ", args);
+        if(this.debug) console.log("Sending id:", id, ", args: ", args);
         this.connection.send(id+":"+JSON.stringify(args));
     },
     connect: function(path, id) {
         var l = window.location;
         var url = (l.host=="https:"?"wss://":"ws://")+l.host+path+"?id="+id;
         this.connection = new WebSocket(url);
-        this.connection.onmessage = this.onmessage;
+        this.connection.onmessage = this.onmessage.bind(this);
     },
     onmessage: function(msg) {
+        if(this.debug) console.log("Received:", msg);
         var idx = msg.data.indexOf(":");
         var id = msg.data.substring(0,idx);
         var method = msg.data.substring(idx+1,idx+2);
@@ -22,6 +24,8 @@ window.ripley = {
             switch(method) {
             case "R": elt.innerHTML = content; break; // Replace
             case "A": elt.innerHTML += content; break; // Append
+            case "P": elt.innerHTML = contet + elt.innerHTML; // Prepend
+            case "D": elt.parentElement.removeChild(elt); // Delete
             default: console.error("Received unrecognized patch method: ", method);
             }
         }
