@@ -9,6 +9,7 @@
             [clojure.java.io :as io]
             [ripley.impl.output :refer [*html-out*]]))
 
+(set! *warn-on-reflection* true)
 
 (def ^:dynamic *live-context* nil)
 (def ^:dynamic *component-id* nil)
@@ -36,7 +37,7 @@
       id))
 
   (register-callback! [this callback]
-    (let [id (str (:next-id @state))]
+    (let [id (:next-id @state)]
       (swap! state #(let [state (-> %
                                     (update :next-id inc)
                                     (update :callbacks assoc id callback))]
@@ -62,7 +63,6 @@
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
-  (println "render-with-context " render-fn)
   (let [id (java.util.UUID/randomUUID)
         state (atom {:next-id 0
                      :status :not-connected
@@ -91,7 +91,21 @@
 (defn current-context-id []
   (:context-id @(:state *live-context*)))
 
-
+(defn- cleanup-before-render
+  "Cleanup component from context before it is rerendered.
+  This will remove stale callbacks and children."
+  [{:keys [callbacks components] :as state} id]
+  ;; FIXME: Also recursively clear any child components (and their callbacks) when a parent is rerendered
+  (let [{child-component-ids :children
+         callback-ids :callbacks} (components id)]
+    (when (seq callback-ids)
+      (println "component " id " has " callback-ids " callbacks\nall-callbacks: " callbacks)
+      (def callbacks* callbacks)
+      (def callback-ids* callback-ids))
+    (-> state
+        (assoc :callbacks (if (seq callback-ids)
+                            (reduce dissoc callbacks callback-ids)
+                            callbacks)))))
 
 (defn connection-handler [uri]
   (params/wrap-params
@@ -106,11 +120,11 @@
              (doto channel
                (server/on-close (fn [_status]
                                   (cleanup-ctx ctx)))
-               (server/on-receive (fn [data]
+               (server/on-receive (fn [^String data]
                                     (let [idx (.indexOf data ":")
-                                          id (if (pos? idx)
-                                               (subs data 0 idx)
-                                               data)
+                                          id (Long/parseLong (if (pos? idx)
+                                                               (subs data 0 idx)
+                                                               data))
                                           args (if (pos? idx)
                                                  (seq (cheshire/decode (subs data (inc idx))))
                                                  nil)
@@ -123,16 +137,14 @@
                     :status :connected)
              ;; PENDING: watch for new live components
              ;; - needs to bind live context when rerendering
-             ;; - how to remove old callbacks (needs to be recorded within a live component)
              (doseq [[id {:keys [source component]}] (:components @(:state ctx))
                      :let [ch (p/to-channel source)]]
                (go-loop [val (<! ch)]
                  (when val
-                   ;; FIXME: when rerendering this component, clear its old callbacks
-                   ;; Also clear any child components (and their callbacks) when a parent is rerendered
                    (binding [*live-context* ctx
                              *html-out* (java.io.StringWriter.)
                              *component-id* id]
+                     (swap! (:state ctx) cleanup-before-render id)
                      (try
                        (component val)
                        (server/send! channel (str id ":R:" (str *html-out*)))
