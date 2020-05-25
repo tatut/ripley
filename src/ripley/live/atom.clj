@@ -5,11 +5,12 @@
 
 (defn atom-source [source-atom]
   (let [key (java.util.UUID/randomUUID)
-        ch (async/chan (async/sliding-buffer 1))]
+        ch (async/chan 1)]
     (>!! ch @source-atom)
     (add-watch source-atom key
                (fn [_ _ old-value new-value]
                  (when (not= old-value new-value)
+                   ;;(println source-atom " value: " old-value " => " new-value)
                    (go
                      (>! ch new-value)))))
     (reify p/Source

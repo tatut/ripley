@@ -24,8 +24,16 @@ window.ripley = {
             switch(method) {
             case "R": elt.innerHTML = content; break; // Replace
             case "A": elt.innerHTML += content; break; // Append
-            case "P": elt.innerHTML = content + elt.innerHTML; // Prepend
-            case "D": elt.parentElement.removeChild(elt); // Delete
+            case "P": elt.innerHTML = content + elt.innerHTML; break; // Prepend
+            case "D": elt.parentElement.removeChild(elt); break;// Delete
+            case "@": {
+                // set attributes
+                var attrs = JSON.parse(content);
+                for(var attr in attrs) {
+                    elt.setAttribute(attr, attrs[attr]);
+                }
+                break;
+            }
             default: console.error("Received unrecognized patch method: ", method);
             }
         }

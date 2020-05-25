@@ -11,10 +11,10 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
+            [todomvc.mentions :as mentions]
             [cheshire.core :as cheshire]
             [clojure.string :as str]
             [clojure.core.async :as async]))
-
 
 (defn todo-item [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
   (h/html
@@ -46,80 +46,18 @@
                                          :none)}}
        label]]]]))
 
-(defn mentions-popup [on-select {:keys [showing? searching? term results]}]
-  (h/html
-   [:div {:style {:display (if showing? :block :none)
-                  :z-index 999
-                  :position :static}}
-    [::h/when searching?
-     [:div {:style {:background-color :wheat
-                    :padding "1rem"
-                    :border "solid 1px black"}}
-      "Searching... " term]]
-    [::h/when (seq results)
-     [:div
-      [::h/for [{:keys [id login avatar_url] :as user} (take 10 results)]
-       [:div {:on-click #(on-select user)}
-        [:img {:src avatar_url :width 32 :height 32}]
-        login]]]]]))
 
-(defn- search-gh-users [txt]
-  (let [results
-        (-> "https://api.github.com/search/users"
-            (client/get {:query-params {"q" txt}})
-            deref :body
-            (cheshire/decode keyword) :items)]
-    (into []
-          (map #(select-keys % [:avatar_url :login :id]))
-          results)))
-
-(defn- update-mentions [mentions-atom ch]
-  (cond
-    (= ch "@")
-    (swap! mentions-atom assoc :showing? true)
-
-    (:showing? @mentions-atom)
-    (swap! mentions-atom
-           #(-> %
-                (update :term str ch)
-                (assoc :searching? true))))
-  (let [{term :term} @mentions-atom]
-    (when (not (str/blank? term))
-      (async/thread
-        (let [users (search-gh-users term)]
-          (println "found " (count users) " gh users")
-          (swap! mentions-atom assoc
-                 :showing? true
-                 :searching? false
-                 :results users))))))
 
 (defn todo-form [storage]
-  (let [mentions (atom {:showing? false
-                        :searching? false
-                        :term ""
-                        :results nil})
-        text (atom "")]
-    (h/html
-     [:form {:action "#" :on-submit "return false;"}
-      [::h/live
-       {:source (atom-source text)
-        :component
-        (fn [current-text]
-          (h/html
-           [:input#new-todo {:type :text
-                             :value current-text
-                             :on-key-press (js/js (partial update-mentions mentions) js/keycode-char)
-                             :on-change (js/js #(reset! text %) js/change-value)}]))}]
-      [::h/live {:source (atom-source mentions)
-                 :component (partial mentions-popup (fn [user]
-                                                      (println "selected: " user)
-                                                      (swap! mentions assoc :showing? false)))}]
-      [:button {:on-click (js/js (fn [todo]
-                                   (reset! text "")
-                                   (p/add-todo storage {:label todo
-                                                        :complete? false}))
-                                 (js/input-value :new-todo))}
-       "Add todo"]])))
+  (h/html
+   [:form {:action "#" :on-submit "return false;"}
+    (mentions/mentions-input :new-todo)
+
+    [:button {:on-click (js/js (fn [todo]
+                                 (p/add-todo storage {:label todo
+                                                      :complete? false}))
+                               (js/input-value :new-todo))}
+     "Add todo"]]))
 
 (defn todomvc [storage]
   (h/html

@@ -4,9 +4,11 @@
             [clojure.walk :as walk]
             [ripley.live.context :as context]
             [ripley.live.protocols :as p]
+            [ripley.live.source :as source]
             [clojure.core.async :as async]
             ripley.js
-            [ripley.impl.output :refer [*html-out*]])
+            [ripley.impl.output :refer [*html-out*]]
+            [cheshire.core :as cheshire])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -91,9 +93,11 @@
 
 (defn- compile-style [style]
   (cond
+    ;; String style attr, pass it through as is
     (string? style)
     `(out! " style=\"" ~style "\"")
 
+    ;; Render maps with garden, if present
     (map? style)
     (if-let [compile-style @garden-compile-style]
       (if (static-form? style #(str/starts-with? (name %) "garden."))
@@ -104,6 +108,47 @@
       (throw (ex-info "No garden compiler found, add garden to deps to support CSS compilation"
                       {:missing-var 'garden.compiler/compile-style})))))
 
+(defn- live-attributes [attrs]
+  (into #{}
+        (keep (fn [[attr val]]
+                (when (and (vector? val)
+                           (= ::live (first val)))
+                  attr)))
+        attrs))
+
+(defn- live-source-and-component [[_live & opts]]
+  (if (map? (first opts))
+    (if (and (contains? (first opts) :source)
+             (contains? (first opts) :component))
+      (first opts)
+      (throw (ex-info "Live map options must contains :source and :component"
+                      {:invalid-options opts})))
+    (let [[source component] opts]
+      (merge {:source source}
+             (when component
+               {:component component})))))
+
+(defn- register-live-attr [component-live-id attr live]
+  (let [{:keys [source component]} (live-source-and-component live)
+        val (gensym "val")]
+    `(let [source# (source/source ~source)]
+       (when (p/immediate? source#)
+         (out! " " ~(name attr) "=\"")
+         (let [~val (async/<!! (p/to-channel source#))]
+           (dyn! ~(if component
+                    (list component val)
+                    val)))
+         (out! "\""))
+       (binding [context/*component-id* ~component-live-id]
+         (p/register! context/*live-context* source#
+                      (fn [~val]
+                        ;; FIXME: handle style compilation if attr is :style
+                        (out! (cheshire/encode {~attr (str ~(if component
+                                                              (list component val)
+                                                              val))})))
+                      {:patch :attributes
+                       :parent ~component-live-id})))))
+
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
   [body]
@@ -112,37 +157,48 @@
         class-names (element-class-names element-kw)
         id (element-id element-kw)
         [props children] (props-and-children body)
+        live-attrs (live-attributes props)
+        live-id (when (seq live-attrs) (gensym "live-id"))
         props (merge props
                      (when (seq class-names)
                        {:class (str/join " " class-names)})
-                     (when id
-                       {:id id}))]
-    `(do
-       (out!
-        "<" ~(name element))
-       ~@(for [[attr val] props
-               :let [html-attr (html-attr-name attr)]]
-           (if (= :style attr)
-             (compile-style val)
-             (if-let [static-value
-                      (cond
-                        (keyword? val) (name val)
-                        (string? val) val
-                        (number? val) (str val)
-                        :else nil)]
-               ;; Expand a static attribute
-               `(out! ~(str " " html-attr "=\"" static-value "\""))
-               ;; Expand dynamic attribute (where nil removes the value)
-               (let [valsym (gensym "val")]
-                 `(when-let [~valsym ~val]
-                    (out! " " ~html-attr "=\""
-                          ~(if (callback-attributes html-attr)
-                             `(register-callback ~valsym)
-                             `(str ~valsym))
-                          "\""))))))
-       (out! ">")
-       ~@(compile-children children)
-       (out! "</" ~(name element) ">"))))
+                     (when (or live-id id)
+                       {:id (or live-id id)}))]
+    `(~@(if (seq live-attrs)
+          `(let [~live-id (p/register! context/*live-context* nil nil {})])
+          [`do])
+      (out!
+       "<" ~(name element))
+      ~@(for [[attr val] (if (seq live-attrs)
+                           (merge props {:id `(str "__rl" ~live-id)})
+                           props)
+              :let [html-attr (html-attr-name attr)]]
+          (if (live-attrs attr)
+            ;; Live attribute, register source
+            (register-live-attr live-id attr val)
+
+            ;; Style or other regular attribute
+            (if (= :style attr)
+              (compile-style val)
+              (if-let [static-value
+                       (cond
+                         (keyword? val) (name val)
+                         (string? val) val
+                         (number? val) (str val)
+                         :else nil)]
+                ;; Expand a static attribute
+                `(out! ~(str " " html-attr "=\"" static-value "\""))
+                ;; Expand dynamic attribute (where nil removes the value)
+                (let [valsym (gensym "val")]
+                  `(when-let [~valsym ~val]
+                     (out! " " ~html-attr "=\""
+                           ~(if (callback-attributes html-attr)
+                              `(register-callback ~valsym)
+                              `(str ~valsym))
+                           "\"")))))))
+      (out! ">")
+      ~@(compile-children children)
+      (out! "</" ~(name element) ">"))))
 
 (defn compile-fragment [body]
   (let [[props children] (props-and-children body)]
@@ -185,25 +241,20 @@
 (defn compile-live
   "Compile special :ripley.html/live element."
   [[_ opts :as live-element]]
-  (assert (= 2 (count live-element))
-          "Live element has exactly one parameter: options map or source")
-  (when (map? opts)
-    (assert (contains? opts :source) "Live element must have a :source instance")
-    (assert (contains? opts :component) "Live element must have a :component function"))
-  `(let [source# ~(if (map? opts)
-                    (:source opts)
-                    opts)
-         component# ~(if (map? opts)
-                       (:component opts)
-                       `(fn [thing#]
-                          (out! (str thing#))))
-         id# (p/register! context/*live-context* source# component#
-                          ~(select-keys opts [:patch]))]
-     (out! "<span id=\"__rl" id# "\">")
-     (when (p/immediate? source#)
-       (context/with-component-id id#
-         (component# (async/<!! (p/to-channel source#)))))
-     (out! "</span>")))
+  (let [{:keys [source component]} (live-source-and-component live-element)]
+    `(let [source# (source/source ~source)
+           component# ~(or component
+                           `(fn [thing#]
+                              (out! (str thing#))))
+           id# (p/register! context/*live-context* source# component#
+                            ~(if (map? opts)
+                               (select-keys opts [:patch])
+                               {}))]
+       (out! "<span id=\"__rl" id# "\">")
+       (when (p/immediate? source#)
+         (context/with-component-id id#
+           (component# (async/<!! (p/to-channel source#)))))
+       (out! "</span>"))))
 
 (def compile-special {:<> #'compile-fragment
                       ::for #'compile-for

@@ -34,7 +34,7 @@
   "Starts go block for live component updates."
   [{state :state :as ctx}
    id
-   {:keys [source component patch]
+   {:keys [source component patch parent]
     :or {patch :replace}}
    wait-ch]
 
@@ -48,6 +48,7 @@
         (if (= val :ripley.live/tombstone)
           ;; source says this component should be removed, send deletion patch to client
           ;; and close the source
+          ;; FIXME: don't send deletion patch for :attributes
           (do (server/send! (:channel @state) (str id ":D"))
               (p/close! source))
 
@@ -59,11 +60,15 @@
               (try
                 (component val)
                 (server/send! (:channel @state)
-                              (str id
+                              (str (if (= patch :attributes)
+                                     ;; Attributes are sent to the parent element id
+                                     parent
+                                     id)
                                    (case patch
                                      :replace ":R:"
                                      :append ":A:"
-                                     :prepend ":P:")
+                                     :prepend ":P:"
+                                     :attributes ":@:")
                                    (str *html-out*)))
                 (catch Exception e
                   (println "Component render threw exception: " e))))
@@ -89,11 +94,14 @@
                   ;; Register new component as child of if we are inside a component
                   (update-in state [:components *component-id* :children] conj id)
                   state)))
-      (start-component this id
-                       (merge
-                        {:source source :component component}
-                        (select-keys opts [:patch]))
-                       wait-ch)
+
+      ;; Source may be missing (some parent components are registered without their own source)
+      (when source
+        (start-component this id
+                         (merge
+                          {:source source :component component}
+                          (select-keys opts [:patch :parent]))
+                         wait-ch))
       id))
 
   (register-callback! [this callback]
@@ -181,7 +189,7 @@
                                                                  (subs data 0 idx)
                                                                  data))
                                             args (if (pos? idx)
-                                                   (seq (cheshire/decode (subs data (inc idx))))
+                                                   (seq (cheshire/decode (subs data (inc idx)) keyword))
                                                    nil)
                                             callback (-> ctx :state deref :callbacks (get id))]
                                         (if-not callback
