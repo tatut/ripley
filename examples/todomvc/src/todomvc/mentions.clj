@@ -66,17 +66,16 @@
    [:<>
     [:div {:style [::h/live
                    showing?
-                   ;; show a string for now
-                   #(str "z-index:999;position:static;display:" (if % "block" "none") ";")]
-           #_{:display (if showing? :block :none)
-              :z-index 999
-              :position :static}}
+                   (fn [showing?]
+                     {:display (if showing? :block :none)
+                      :z-index 999
+                      :position :static})]}
      [:div {:style [::h/live searching?
-                    #(str "background-color: wheat; padding: 1rem; border: solid 1px black; display: "
-                          (if % "block" "none") ";")
-                    #_{:background-color :wheat
-                     :padding "1rem"
-                     :border "solid 1px black"}]}
+                    (fn [searching?]
+                      {:background-color :wheat
+                       :padding "1rem"
+                       :border "solid 1px black"
+                       :display (if searching? :block :none)})]}
       "Searching... "
       [::h/live term h/out!]]]
 
@@ -96,21 +95,30 @@
         search-term-ch (:search-term-ch state)]
     (h/html
      [:<>
-      [:input {:type :text
-               :id (name input-id)
-               :on-key-up (js/js (fn [{:keys [caret term] :as payload}]
-                                   (when term
-                                     (println "TERMI: " term)
-                                     (async/put! search-term-ch term)))
-                                 (str "(function() { var e = document.getElementById('" (name input-id) "');"
-                                      "var p = e.selectionStart;"
-                                      "var t = e.value.substring(0,p);"
-                                      "var i = t.lastIndexOf('@');"
-                                      "if(i != -1) {"
-                                      "return {caret: p, term: t.substring(i+1)};"
-                                      "} else {"
-                                      "return null;"
-                                      "}})()"))}]
+      [:input.input
+       {:type :text
+        :id (name input-id)
+        :on-key-up (js/js (fn [{:keys [caret term move] :as payload}]
+                            (cond
+                              move
+                              (println "vaihda highlight: " move)
+                              term
+                              (do
+                                (println "TERMI: " term)
+                                (async/put! search-term-ch term))))
+                          (str "(function() { "
+                               "var c = window.event.keyCode;"
+                               "if(c == 38) { return {move: 'u'} }"
+                               "if(c == 40) { return {move: 'd'} }"
+                               "var e = document.getElementById('" (name input-id) "');"
+                               "var p = e.selectionStart;"
+                               "var t = e.value.substring(0,p);"
+                               "var i = t.lastIndexOf('@');"
+                               "if(i != -1) {"
+                               "return {caret: p, term: t.substring(i+1)};"
+                               "} else {"
+                               "return null;"
+                               "}})()"))}]
 
       (mentions-popup #(println "VALITTU: " %)
                       state)])))
