@@ -12,41 +12,27 @@
 
 (defn todo-item [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
   (h/html
-   [:li
-    [:input {:type :checkbox
-             :checked complete?
-             :on-change #(if complete?
-                           (mark-incomplete id)
-                           (mark-complete id))}]
-    [:span {:style {:text-decoration (if complete?
-                                       :line-through
-                                       :none)}}
-     label]
-
-    [:button {:on-click #(remove id)} "remove"]]))
-
-(defn todo-list [{:keys [mark-complete mark-incomplete]} current-todos]
-  (h/html
-   [:ul {:style {:margin "1rem"}}
-    [::h/for [{:keys [label id complete?]} current-todos]
-     [:li
-      [:input {:type :checkbox
-               :checked complete?
-               :on-change #(if complete?
-                             (mark-incomplete id)
-                             (mark-complete id))}]
-      [:span {:style {:text-decoration (if complete?
-                                         :line-through
-                                         :none)}}
-       label]]]]))
-
+   [:<>
+    [:td
+     [:input {:type :checkbox
+              :checked complete?
+              :on-change #(if complete?
+                            (mark-incomplete id)
+                            (mark-complete id))}]]
+    [:td
+     [:span {:style {:text-decoration (if complete?
+                                        :line-through
+                                        :none)}}
+      label]]
+    [:td
+     [:a.delete {:on-click #(remove id)} "remove"]]]))
 
 
 (defn todo-form [storage]
   (h/html
    [:form {:action "#" :on-submit "return false;"}
-    (mentions/mentions-input :new-todo)
-
+    #_(mentions/mentions-input :new-todo)
+    [:input.input#new-todo {:type :text :placeholder "What needs to be done?"}]
     [:button {:on-click (js/js (fn [todo]
                                  (p/add-todo storage {:label todo
                                                       :complete? false}))
@@ -61,8 +47,11 @@
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
-      [:ul
-       (live-collection {:source (p/live-source storage)
+      [:table.table
+       [:thead [:tr [:td " "] [:td "What to do?"] [:td " "]]]
+       (live-collection {:container-element :tbody
+                         :child-element :tr
+                         :source (p/live-source storage)
                          :key :id
                          :render (partial todo-item {:mark-complete (partial p/mark-complete storage)
                                                      :mark-incomplete (partial p/mark-incomplete storage)
