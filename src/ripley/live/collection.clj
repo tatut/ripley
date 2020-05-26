@@ -14,8 +14,12 @@
                                patch ; :append or :prepend for where to render new entities
                                key ; function to extract entity identity (like an :id column)
                                source ; source that provides the collection
+                               container-element ; HTML element type of container, defaults to :span
+                               child-element ; HTML element type to render new children in, defaults to :span
                                ]
-                        :or {patch :append}}]
+                        :or {patch :append
+                             container-element :span
+                             child-element :span}}]
   (let [ctx context/*live-context*
         collection-ch (p/to-channel source)
         initial-collection (async/<!! collection-ch)
@@ -31,7 +35,7 @@
         ;; Register dummy component as parent, that has no render and will never receive updates
         collection-id (p/register! ctx (ch->source (async/chan 1)) :_ignore {})]
 
-    (h/out! "<span id=\"__rl" collection-id "\">")
+    (h/out! "<" (name container-element) " id=\"__rl" collection-id "\">")
     (binding [context/*component-id* collection-id]
       ;; Read the collection source
       (go-loop [old-collection-by-key (into {} (map (juxt key identity)) initial-collection)
@@ -54,9 +58,9 @@
                 (p/send! ctx (str collection-id (case patch
                                                   :append ":A:"
                                                   :prepend ":P:")
-                                  "<span id=\"__rl" new-id "\">"
+                                  "<" (name child-element) " id=\"__rl" new-id "\">"
                                   (render-to-string render entity)
-                                  "</span>"))
+                                  "</" (name child-element) ">"))
                 (swap! source-by-key assoc new-key source))
 
               (not= old-value entity)
@@ -70,9 +74,10 @@
       (let [sources @source-by-key]
         (doseq [entity initial-collection
                 :let [k (key entity)
-                      source (sources k)]]
-          ;(println "rendering live component for entity: " entity)
-          (h/html
-           [::h/live {:source source
-                      :component render}]))))
-    (h/out! "</span>")))
+                      source (sources k)
+                      id (p/register! context/*live-context* source render {})]]
+          (h/out! "<" (name child-element) " id=\"__rl" id "\">")
+          (context/with-component-id id
+            (render (async/<!! (p/to-channel source))))
+          (h/out! "</" (name child-element) ">"))))
+    (h/out! "</" (name container-element) ">")))
