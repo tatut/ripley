@@ -1,20 +1,14 @@
 (ns todomvc.main
   (:require [ripley.html :as h]
             [ripley.js :as js]
-            [ripley.live.atom :refer [atom-source]]
-            [ripley.live.poll :refer [poll-source]]
             [compojure.core :refer [routes GET]]
             [org.httpkit.server :as server]
-            [org.httpkit.client :as client]
             [ripley.live.context :as context]
             [ripley.live.collection :refer [live-collection]]
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
-            [todomvc.mentions :as mentions]
-            [cheshire.core :as cheshire]
-            [clojure.string :as str]
-            [clojure.core.async :as async]))
+            [todomvc.mentions :as mentions]))
 
 (defn todo-item [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
   (h/html
@@ -62,7 +56,8 @@
 (defn todomvc [storage]
   (h/html
    [:html
-    [:head]
+    [:head
+     [:link {:rel :stylesheet :href "https://cdn.jsdelivr.net/npm/bulma@0.8.2/css/bulma.min.css"}]]
     [:body
      (h/live-client-script "/__ripley-live")
      [:div.todomvc
