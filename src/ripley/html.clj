@@ -128,24 +128,35 @@
              (when component
                {:component component})))))
 
+(defn style->str [style]
+  (if (map? style)
+    (str/replace (@garden-compile-style [style]) "\n" "")
+    style))
+
 (defn- register-live-attr [component-live-id attr live]
   (let [{:keys [source component]} (live-source-and-component live)
-        val (gensym "val")]
+        val (gensym "val")
+        new-val (if component
+                  (list component val)
+                  val)
+        new-val (if (= attr :style)
+                  `(style->str ~new-val)
+                  new-val)]
     `(let [source# (source/source ~source)]
        (when (p/immediate? source#)
          (out! " " ~(name attr) "=\"")
-         (let [~val (async/<!! (p/to-channel source#))]
-           (dyn! ~(if component
-                    (list component val)
-                    val)))
+         (let [~val (async/<!! (p/to-channel source#))
+               ~@(when component
+                   [val (list component val)])
+               ~@(when (= :style attr)
+                   [val `(style->str ~val)])]
+           (dyn! ~val))
          (out! "\""))
        (binding [context/*component-id* ~component-live-id]
          (p/register! context/*live-context* source#
                       (fn [~val]
                         ;; FIXME: handle style compilation if attr is :style
-                        (out! (cheshire/encode {~attr (str ~(if component
-                                                              (list component val)
-                                                              val))})))
+                        (out! (cheshire/encode {~attr (str ~new-val)})))
                       {:patch :attributes
                        :parent ~component-live-id})))))
 
