@@ -160,6 +160,8 @@
                       {:patch :attributes
                        :parent ~component-live-id})))))
 
+(def no-close-tag #{"input"})
+
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
   [body]
@@ -179,7 +181,7 @@
           `(let [~live-id (p/register! context/*live-context* nil nil {})])
           [`do])
       (out!
-       "<" ~(name element))
+       ~(str "<" element))
       ~@(for [[attr val] (if (seq live-attrs)
                            (merge props {:id `(str "__rl" ~live-id)})
                            props)
@@ -207,9 +209,11 @@
                               `(register-callback ~valsym)
                               `(str ~valsym))
                            "\"")))))))
-      (out! ">")
-      ~@(compile-children children)
-      (out! "</" ~(name element) ">"))))
+      ~@(if (no-close-tag element)
+          [`(out! ">")]
+          (concat [`(out! ">")]
+                  (compile-children children)
+                  [`(out! ~(str "</" element ">"))])))))
 
 (defn compile-fragment [body]
   (let [[props children] (props-and-children body)]
@@ -251,21 +255,24 @@
 
 (defn compile-live
   "Compile special :ripley.html/live element."
-  [[_ opts :as live-element]]
-  (let [{:keys [source component]} (live-source-and-component live-element)]
+  [live-element]
+  (let [{:keys [source component element patch]} (live-source-and-component live-element)
+        element (if element
+                  (name element)
+                  "span")]
     `(let [source# (source/source ~source)
            component# ~(or component
                            `(fn [thing#]
                               (out! (str thing#))))
            id# (p/register! context/*live-context* source# component#
-                            ~(if (map? opts)
-                               (select-keys opts [:patch])
+                            ~(if patch
+                               {:patch patch}
                                {}))]
-       (out! "<span id=\"__rl" id# "\">")
+       (out! ~(str "<" element " id=\"__rl") id# "\">")
        (when (p/immediate? source#)
          (context/with-component-id id#
            (component# (async/<!! (p/to-channel source#)))))
-       (out! "</span>"))))
+       (out! ~(str "</" element ">")))))
 
 (def compile-special {:<> #'compile-fragment
                       ::for #'compile-for
@@ -273,7 +280,6 @@
                       ::when #'compile-when
                       ::cond #'compile-cond
                       ::live #'compile-live})
-
 
 (defn compile-html [body]
   (cond
