@@ -81,3 +81,51 @@
             (render (async/<!! (p/to-channel source))))
           (h/out! "</" (name child-element) ">"))))
     (h/out! "</" (name container-element) ">")))
+(defn- scroll-sensor [callback]
+  (let [g (name (gensym "__checkscroll"))
+        id (name (gensym "__scrollsensor"))]
+    (h/out!
+     "<script>"
+     "function " g "() {"
+     " var yMax = window.innerHeight; "
+     " var y = document.getElementById('" id "').getBoundingClientRect().top;"
+     ;;" console.log('hep yMax: ', yMax, ', y: ', y); "
+     " if(0 <= y && y <= yMax) { " (h/register-callback callback) "}"
+     "}\n"
+     "window.addEventListener('scroll', " g ");"
+     "</script>"
+     "<span id=\"" id "\"></span>")))
+
+(defn infinite-scroll [{:keys [render
+                               container-element
+                               child-element
+                               next-batch ;; Function to return the next batch
+                               ]
+                        :or {container-element :span
+                             child-element :span}}]
+  (let [next-batch-ch (async/chan)
+        batches (async/chan)
+        render-batch (fn [items]
+                       (doseq [item items]
+                         (h/out! "<" (name child-element) ">")
+                         (render item)
+                         (h/out! "</" (name child-element) ">")))]
+
+    (go-loop [_ (<! next-batch-ch)]
+      (>! batches (next-batch))
+      (recur (<! next-batch-ch)))
+
+    (h/out! "<" (name container-element) ">")
+    (println "calling render-batch")
+    (render-batch (next-batch))
+
+    (println "done rendering first batch")
+    (h/html
+     [:<>
+      [::h/live {:source (ch->source batches false)
+                 :component render-batch
+                 :patch :append}]
+      (scroll-sensor #(async/>!! next-batch-ch 1))])
+
+    (println "after html")
+    (h/out! "</" (name container-element) ">")))
