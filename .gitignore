@@ -2,3 +2,5 @@
 /.nrepl-port
 /examples/todomvc/.cpcache/
 /examples/todomvc/.nrepl-port
+/examples/infinite-orange/.cpcache/
+/examples/infinite-orange/.nrepl-port
