@@ -1,5 +1,8 @@
 # ripley
 
+*NOTE:* Consider this *alpha* quality and subject to change while I'm figuring things out!
+
+
 Ripley is a fast server-side rendered web UI toolkit with live components.
 
 Create rich webapps without the need for a SPA frontend.
