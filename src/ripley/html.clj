@@ -274,12 +274,47 @@
            (component# (async/<!! (p/to-channel source#)))))
        (out! ~(str "</" element ">")))))
 
+(defn- extract-live-let-bindings [[binding-map source :as bindings]]
+  (assert (= 2 (count bindings)) "Only 1 binding map and source pair supported currently")
+  (assert (map? binding-map) "Only map destructuring binding supported currently")
+  {:bindings (into {}
+                   (mapcat (fn [[k v]]
+                             (cond
+                               (and (= k :as) (symbol? v))
+                               [[v ::root]]
+
+                               (and (symbol? k) (keyword? v))
+                               [[k v]]
+
+                               (and (keyword? k) (= (name k) "keys"))
+                               (let [ns-part (namespace k)]
+                                 (for [sym v]
+                                   [sym (keyword ns-part (name sym))]))
+
+                               :else
+                               (throw (ex-info "Unsupported binding map key/value"
+                                               {:key k
+                                                :value v})))))
+                   binding-map)
+   :source source})
+(defn compile-live-let [[_ bindings body :as live-let]]
+  (assert (= 3 (count live-let))
+          ":ripley.html/live-let takes 2 arguments: bindings vector and body html")
+  ;; FIXME: extract bindings
+  ;; walk body and turn bindings into live components
+  (let [[binding-path source] (extract-live-let-bindings bindings)])
+  ;; generate sources for all the bound things
+  ;;
+  `(let ~bindings
+     ~(compile-html body)))
+
 (def compile-special {:<> #'compile-fragment
                       ::for #'compile-for
                       ::if #'compile-if
                       ::when #'compile-when
                       ::cond #'compile-cond
-                      ::live #'compile-live})
+                      ::live #'compile-live
+                      ::live-let #'compile-live-let})
 
 (defn compile-html [body]
   (cond
