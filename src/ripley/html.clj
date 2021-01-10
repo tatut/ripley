@@ -62,8 +62,14 @@
 (defn register-callback [callback]
   (cond
     (instance? ripley.js.JSCallback callback)
-    (str "ripley.send(" (p/register-callback! context/*live-context* (:callback-fn callback)) ","
-         "[" (str/join "," (:js-params callback)) "])")
+    (let [invoke-callback-js (str "ripley.send("
+                                  (p/register-callback! context/*live-context*
+                                                        (:callback-fn callback))
+                                  ",[" (str/join "," (:js-params callback)) "])")
+          condition (:condition callback)]
+      (if condition
+        (str "if(" condition ") " invoke-callback-js)
+        invoke-callback-js))
 
     (fn? callback)
     (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", [])")
