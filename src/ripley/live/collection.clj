@@ -88,6 +88,7 @@
             (render (async/<!! (p/to-channel source))))
           (h/out! "</" (name child-element) ">"))))
     (h/out! "</" container-element-name ">")))
+
 (defn- scroll-sensor [callback]
   (let [g (name (gensym "__checkscroll"))
         id (name (gensym "__scrollsensor"))]

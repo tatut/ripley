@@ -32,14 +32,17 @@
 
 (defrecord TodoPgStorage [ds]
   p/TodoStorage
-  (live-source [_] (subscribe-source #{:todo/created :todo/updated :todo/deleted}
-                                     (fn [_]
-                                       (fetch-todos ds))
-                                     {:event/type :todo/created}))
+  (live-source [_ filter-atom]
+    (subscribe-source #{:todo/created :todo/updated :todo/deleted}
+                      (fn [_]
+                        (fetch-todos ds))
+                      {:event/type :todo/created}))
   (add-todo [_ todo] (add-todo ds todo))
   (remove-todo [_ todo-id] (remove-todo ds todo-id))
   (mark-complete [_ todo-id] (mark-complete ds todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete ds todo-id)))
+
+;; FIXME: implement new additions to pg storage as well
 
 ;; Create the database and initialize it with:
 ;; > CREATE TABLE todos (id SERIAL, label TEXT, complete boolean);

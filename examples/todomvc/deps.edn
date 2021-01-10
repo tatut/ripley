@@ -1,8 +1,10 @@
-{:paths ["src" "../../resources"]
+{:paths ["src" "../../resources" "resources"]
  :deps {ripley {:local/root "../.."}
         compojure {:mvn/version "1.6.1"}
         org.postgresql/postgresql {:mvn/version "42.2.12"}
         seancorfield/next.jdbc {:mvn/version "1.0.445"}
         garden {:mvn/version "1.3.10"}
-        http-kit {:mvn/version "2.4.0-alpha6"} }
+        http-kit {:mvn/version "2.4.0-alpha6"}
+        re-html-template {:git/url "https://github.com/tatut/re-html-template.git"
+                          :sha "b627f9ad70fb5c176689492f75feebd7c2f5483a"}}
  :aliases {:run {:main-opts ["-m" "todomvc.main"]}}}
