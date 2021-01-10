@@ -5,17 +5,23 @@
 
 (defn atom-source [source-atom]
   (let [key (java.util.UUID/randomUUID)
-        ch (async/chan 1)]
-    (>!! ch @source-atom)
+        channels (atom #{})]
+
     (add-watch source-atom key
                (fn [_ _ old-value new-value]
                  (when (not= old-value new-value)
                    ;;(println source-atom " value: " old-value " => " new-value)
                    (go
-                     (>! ch new-value)))))
+                     (doseq [ch @channels]
+                       (>! ch new-value))))))
     (reify p/Source
-      (to-channel [_] ch)
+      (to-channel [_]
+        (let [ch (async/chan 1)]
+          (>!! ch @source-atom)
+          (swap! channels conj ch)
+          ch))
       (immediate? [_] true)
       (close! [_]
         (remove-watch source-atom key)
-        (async/close! ch)))))
+        (doseq [ch @channels]
+          (async/close! ch))))))
