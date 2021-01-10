@@ -151,6 +151,8 @@
                    *html-out* w]
            (try
              (render-fn)
+             (catch Throwable t
+               (println "Exception while rendering!" t))
              (finally
                (when-not (zero? (:next-id @(:state ctx)))
                  ;; Some live components were rendered by the page,
