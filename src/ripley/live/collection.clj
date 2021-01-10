@@ -7,7 +7,8 @@
             [ripley.live.async :refer [ch->source]]
             [clojure.core.async :as async :refer [go-loop <! >!]]
             [ripley.live.context :as context]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.string :as str]))
 
 
 (defn live-collection [{:keys [render ; function to render one entity
@@ -33,9 +34,15 @@
                                   initial-collection))
 
         ;; Register dummy component as parent, that has no render and will never receive updates
-        collection-id (p/register! ctx (ch->source (async/chan 1)) :_ignore {})]
+        collection-id (p/register! ctx (ch->source (async/chan 1)) :_ignore {})
 
-    (h/out! "<" (name container-element) " id=\"__rl" collection-id "\">")
+        container-element-name (h/element-name container-element)
+        container-element-classes (h/element-class-names container-element)]
+
+    (h/out! "<" container-element-name
+            (when (seq container-element-classes)
+              (str " class=\"" (str/join " " container-element-classes) "\""))
+            " id=\"__rl" collection-id "\">")
     (binding [context/*component-id* collection-id]
       ;; Read the collection source
       (go-loop [old-collection-by-key (into {} (map (juxt key identity)) initial-collection)
@@ -80,7 +87,7 @@
           (context/with-component-id id
             (render (async/<!! (p/to-channel source))))
           (h/out! "</" (name child-element) ">"))))
-    (h/out! "</" (name container-element) ">")))
+    (h/out! "</" container-element-name ">")))
 (defn- scroll-sensor [callback]
   (let [g (name (gensym "__checkscroll"))
         id (name (gensym "__scrollsensor"))]
