@@ -16,11 +16,9 @@
                                key ; function to extract entity identity (like an :id column)
                                source ; source that provides the collection
                                container-element ; HTML element type of container, defaults to :span
-                               child-element ; HTML element type to render new children in, defaults to :span
                                ]
                         :or {patch :append
-                             container-element :span
-                             child-element :span}}]
+                             container-element :span}}]
   (let [ctx context/*live-context*
         collection-ch (p/to-channel source)
         initial-collection (async/<!! collection-ch)
@@ -65,9 +63,8 @@
                 (p/send! ctx (str collection-id (case patch
                                                   :append ":A:"
                                                   :prepend ":P:")
-                                  "<" (name child-element) " id=\"__rl" new-id "\">"
-                                  (render-to-string render entity)
-                                  "</" (name child-element) ">"))
+                                  (context/with-component-id new-id
+                                    (render-to-string render entity))))
                 (swap! source-by-key assoc new-key source))
 
               (not= old-value entity)
@@ -83,10 +80,8 @@
                 :let [k (key entity)
                       source (sources k)
                       id (p/register! context/*live-context* source render {})]]
-          (h/out! "<" (name child-element) " id=\"__rl" id "\">")
           (context/with-component-id id
-            (render (async/<!! (p/to-channel source))))
-          (h/out! "</" (name child-element) ">"))))
+            (render (async/<!! (p/to-channel source)))))))
     (h/out! "</" container-element-name ">")))
 
 (defn- scroll-sensor [callback]

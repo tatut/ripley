@@ -22,7 +22,7 @@ window.ripley = {
                 console.error("Received content for non-existant element: ", id);
         } else {
             switch(method) {
-            case "R": elt.innerHTML = content; break; // Replace
+            case "R": elt.outerHTML = content; break; // Replace
             case "A": elt.innerHTML += content; break; // Append
             case "P": elt.innerHTML = content + elt.innerHTML; break; // Prepend
             case "D": elt.parentElement.removeChild(elt); break;// Delete

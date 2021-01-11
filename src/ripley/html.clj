@@ -177,49 +177,51 @@
         id (element-id element-kw)
         [props children] (props-and-children body)
         live-attrs (live-attributes props)
-        live-id (when (seq live-attrs) (gensym "live-id"))
+        live-id (gensym "live-id")
         props (merge props
                      (when (seq class-names)
-                       {:class (str/join " " class-names)})
-                     (when (or live-id id)
-                       {:id (or live-id id)}))]
-    `(~@(if (seq live-attrs)
-          `(let [~live-id (p/register! context/*live-context* nil nil {})])
-          [`do])
-      (out!
-       ~(str "<" element))
-      ~@(for [[attr val] (if (seq live-attrs)
-                           (merge props {:id `(str "__rl" ~live-id)})
-                           props)
-              :let [html-attr (html-attr-name attr)]]
-          (if (live-attrs attr)
-            ;; Live attribute, register source
-            (register-live-attr live-id attr val)
+                       {:class (str/join " " class-names)}))]
+    `(let [~live-id
+           ;; FIXME: do the consume-component-id! only on the FIRST html element
+           ;; during this ripley.html/html expansion call to optimize further
+           ~(if (seq live-attrs)
+              `(or (context/consume-component-id!)
+                   (p/register! context/*live-context* nil nil {}))
+              `(context/consume-component-id!))]
+       (out!
+        ~(str "<" element))
+       (when ~live-id
+         (out! " id=\"__rl" ~live-id "\""))
+       ~@(for [[attr val] props
+               :let [html-attr (html-attr-name attr)]]
+           (if (live-attrs attr)
+             ;; Live attribute, register source
+             (register-live-attr live-id attr val)
 
-            ;; Style or other regular attribute
-            (if (= :style attr)
-              (compile-style val)
-              (if-let [static-value
-                       (cond
-                         (keyword? val) (name val)
-                         (string? val) val
-                         (number? val) (str val)
-                         :else nil)]
-                ;; Expand a static attribute
-                `(out! ~(str " " html-attr "=\"" static-value "\""))
-                ;; Expand dynamic attribute (where nil removes the value)
-                (let [valsym (gensym "val")]
-                  `(when-let [~valsym ~val]
-                     (out! " " ~html-attr "=\""
-                           ~(if (callback-attributes html-attr)
-                              `(register-callback ~valsym)
-                              `(str ~valsym))
-                           "\"")))))))
-      ~@(if (no-close-tag element)
-          [`(out! ">")]
-          (concat [`(out! ">")]
-                  (compile-children children)
-                  [`(out! ~(str "</" element ">"))])))))
+             ;; Style or other regular attribute
+             (if (= :style attr)
+               (compile-style val)
+               (if-let [static-value
+                        (cond
+                          (keyword? val) (name val)
+                          (string? val) val
+                          (number? val) (str val)
+                          :else nil)]
+                 ;; Expand a static attribute
+                 `(out! ~(str " " html-attr "=\"" static-value "\""))
+                 ;; Expand dynamic attribute (where nil removes the value)
+                 (let [valsym (gensym "val")]
+                   `(when-let [~valsym ~val]
+                      (out! " " ~html-attr "=\""
+                            ~(if (callback-attributes html-attr)
+                               `(register-callback ~valsym)
+                               `(str ~valsym))
+                            "\"")))))))
+       ~@(if (no-close-tag element)
+           [`(out! ">")]
+           (concat [`(out! ">")]
+                   (compile-children children)
+                   [`(out! ~(str "</" element ">"))])))))
 
 (defn compile-fragment [body]
   (let [[props children] (props-and-children body)]
@@ -258,11 +260,18 @@
                  [test (compile-html expr)])
                (partition 2 clauses))))
 
+(defn compile-let
+  "Compile special :ripley.html/let element."
+  [[_ bindings body]]
+  (assert (vector? bindings) "Let bindings must be a vector")
+  `(let ~bindings
+     ~(compile-html body)))
 
 (defn compile-live
   "Compile special :ripley.html/live element."
   [live-element]
   (let [{:keys [source component element patch]} (live-source-and-component live-element)
+        ;; FIXME: not used now, the actual render gives the element
         element (if element
                   (name element)
                   "span")]
@@ -274,13 +283,15 @@
                             ~(if patch
                                {:patch patch}
                                {}))]
-       (out! ~(str "<" element " id=\"__rl") id# "\">")
-       (when (p/immediate? source#)
+       (if (p/immediate? source#)
          (context/with-component-id id#
-           (component# (async/<!! (p/to-channel source#)))))
-       (out! ~(str "</" element ">")))))
+           (component# (async/<!! (p/to-channel source#))))
+
+         ;; Render placeholder now that will be replaced with contents
+         (out! ~(str "<span id=\"__rl") id# "\" />")))))
 
 (def compile-special {:<> #'compile-fragment
+                      ::let #'compile-let
                       ::for #'compile-for
                       ::if #'compile-if
                       ::when #'compile-when

@@ -14,9 +14,24 @@
 (def ^:dynamic *live-context* nil)
 (def ^:dynamic *component-id* nil)
 
+;; Bound to an atom when live components render that contains
+;; the components id. The first element will consume
+;; the id and reset this to nil.
+(def ^:dynamic *output-component-id* nil)
+
+(defn consume-component-id!
+  "Called by HTML rendering to get live id for currently rendering component."
+  []
+  (when *output-component-id*
+    (let [id @*output-component-id*]
+      (reset! *output-component-id* nil)
+      id)))
+
 (defmacro with-component-id [id & body]
-  `(binding [*component-id* ~id]
-     ~@body))
+  `(let [id# ~id]
+     (binding [*component-id* id#
+               *output-component-id* (atom id#)]
+       ~@body)))
 
 (defn- cleanup-before-render
   "Cleanup component from context before it is rerendered.
@@ -54,24 +69,23 @@
 
           (when val
             (binding [*live-context* ctx
-                      *html-out* (java.io.StringWriter.)
-                      *component-id* id]
-
-              (try
-                (component val)
-                (server/send! (:channel @state)
-                              (str (if (= patch :attributes)
-                                     ;; Attributes are sent to the parent element id
-                                     parent
-                                     id)
-                                   (case patch
-                                     :replace ":R:"
-                                     :append ":A:"
-                                     :prepend ":P:"
-                                     :attributes ":@:")
-                                   (str *html-out*)))
-                (catch Exception e
-                  (println "Component render threw exception: " e))))
+                      *html-out* (java.io.StringWriter.)]
+              (with-component-id id
+                (try
+                  (component val)
+                  (server/send! (:channel @state)
+                                (str (if (= patch :attributes)
+                                       ;; Attributes are sent to the parent element id
+                                       parent
+                                       id)
+                                     (case patch
+                                       :replace ":R:"
+                                       :append ":A:"
+                                       :prepend ":P:"
+                                       :attributes ":@:")
+                                     (str *html-out*)))
+                  (catch Exception e
+                    (println "Component render threw exception: " e)))))
             (recur (<! ch))))))))
 
 
