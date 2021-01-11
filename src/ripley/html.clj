@@ -52,7 +52,8 @@
   (map compile-html children))
 
 (def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
-                           "onkeypress" "onkeyup" "onkeydown"})
+                           "onkeypress" "onkeyup" "onkeydown"
+                           "ondblclick"})
 
 (defn- html-attr-name [attr-name]
   (str/lower-case (str/replace (name attr-name) #"-" "")))
