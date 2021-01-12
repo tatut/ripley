@@ -45,11 +45,21 @@
         (update :components #(reduce dissoc % child-component-ids))
         (update :callbacks #(reduce dissoc % callback-ids)))))
 
+(defn- command-payload [id patch-method payload]
+  (str id
+       (case patch-method
+         :replace ":R:"
+         :append ":A:"
+         :prepend ":P:"
+         :attributes ":@:"
+         :eval ":E:")
+       payload))
+
 (defn- start-component
   "Starts go block for live component updates."
   [{state :state :as ctx}
    id
-   {:keys [source component patch parent]
+   {:keys [source component patch parent did-update]
     :or {patch :replace}}
    wait-ch]
 
@@ -68,24 +78,30 @@
               (p/close! source))
 
           (when val
-            (binding [*live-context* ctx
-                      *html-out* (java.io.StringWriter.)]
-              (with-component-id id
-                (try
-                  (component val)
-                  (server/send! (:channel @state)
-                                (str (if (= patch :attributes)
-                                       ;; Attributes are sent to the parent element id
-                                       parent
-                                       id)
-                                     (case patch
-                                       :replace ":R:"
-                                       :append ":A:"
-                                       :prepend ":P:"
-                                       :attributes ":@:")
-                                     (str *html-out*)))
-                  (catch Exception e
-                    (println "Component render threw exception: " e)))))
+            (let [target-id (if (= patch :attributes)
+                              ;; Attributes are sent to the parent element id
+                              parent
+                              id)]
+              (binding [*live-context* ctx
+                        *html-out* (java.io.StringWriter.)]
+                (with-component-id id
+                  (try
+                    (component val)
+                    (server/send! (:channel @state)
+                                  (command-payload
+                                   target-id
+                                   patch
+                                   (str *html-out*)))
+                    (catch Exception e
+                      (println "Component render threw exception: " e)))))
+              ;; If there is a did-update handler, send that as well
+              ;; PENDING: change format to send multiple commands at once
+              (when-let [[patch payload] (when did-update
+                                           (did-update val))]
+                (server/send! (:channel @state)
+                              (command-payload target-id patch payload))))
+
+
             (recur (<! ch))))))))
 
 
@@ -103,7 +119,7 @@
                                               :component component
                                               :children #{}
                                               :callbacks #{}}
-                                             (select-keys opts [:patch]))))]
+                                             (select-keys opts [:patch :did-update]))))]
                 (if *component-id*
                   ;; Register new component as child of if we are inside a component
                   (update-in state [:components *component-id* :children] conj id)
@@ -114,7 +130,7 @@
         (start-component this id
                          (merge
                           {:source source :component component}
-                          (select-keys opts [:patch :parent]))
+                          (select-keys opts [:patch :parent :did-update]))
                          wait-ch))
       id))
 

@@ -154,7 +154,7 @@
     style))
 
 (defn- register-live-attr [component-live-id attr live]
-  (let [{:keys [source component]} (live-source-and-component live)
+  (let [{:keys [source component did-update]} (live-source-and-component live)
         val (gensym "val")
         new-val (if component
                   (list component val)
@@ -178,7 +178,8 @@
                         ;; FIXME: handle style compilation if attr is :style
                         (out! (cheshire/encode {~attr (str ~new-val)})))
                       {:patch :attributes
-                       :parent ~component-live-id})))))
+                       :parent ~component-live-id
+                       :did-update ~did-update})))))
 
 (def no-close-tag #{"input"})
 

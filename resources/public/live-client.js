@@ -34,8 +34,14 @@ window.ripley = {
                 }
                 break;
             }
-            default: console.error("Received unrecognized patch method: ", method);
+            case "E": {
+                // eval code with this bound to live component element
+                var f = new Function(content);
+                f.call(elt);
+                break;
             }
+            default: console.error("Received unrecognized patch method: ", method);}
+
         }
     }
 }
