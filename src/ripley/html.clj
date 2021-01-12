@@ -56,7 +56,13 @@
                            "ondblclick"})
 
 (defn- html-attr-name [attr-name]
-  (str/lower-case (str/replace (name attr-name) #"-" "")))
+  (let [name (name attr-name)]
+    (if (str/starts-with? name "data-")
+      ;; Keep data attribute names as is
+      name
+
+      ;; otherwise lowercase and remove dashes
+      (str/lower-case (str/replace name #"-" "")))))
 
 
 
