@@ -62,6 +62,11 @@
 
 (defn register-callback [callback]
   (cond
+    ;; Multiple values, join by semicolon
+    (vector? callback)
+    (str/join ";" (map register-callback callback))
+
+    ;; A callback record
     (instance? ripley.js.JSCallback callback)
     (let [invoke-callback-js (str "ripley.send("
                                   (p/register-callback! context/*live-context*
@@ -72,9 +77,11 @@
         (str "if(" condition ") " invoke-callback-js)
         invoke-callback-js))
 
+    ;; A raw function, register it as callback
     (fn? callback)
     (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", [])")
 
+    ;; Some js expression, return as is
     (string? callback)
     callback
 
@@ -150,7 +157,7 @@
                   `(style->str ~new-val)
                   new-val)]
     `(let [source# (source/source ~source)]
-       (when (p/immediate? source#)
+       (when (p/immediate? source#) ;; FIXME: don't output if value is nil
          (out! " " ~(name attr) "=\"")
          (let [~val (async/<!! (p/to-channel source#))
                ~@(when component
