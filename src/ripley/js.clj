@@ -13,9 +13,18 @@
   [js-condition callback-fn & js-params]
   (->JSCallback callback-fn js-condition js-params))
 
+(defn keycode-pressed?
+  "Return JS code for checking if keypress event has given keycode"
+  [keycode]
+  (str "window.event.keyCode == " keycode))
+
 (def enter-pressed?
-  "JS code for checking if keypress event is enter"
-  "window.event.keyCode == 13")
+  "JS for checking if enter was pressed"
+  (keycode-pressed? 13))
+
+(def esc-pressed?
+  "JS for checking if escape was pressed"
+  (keycode-pressed? 27))
 
 (def change-value
   "JavaScript for current on-change event value"
