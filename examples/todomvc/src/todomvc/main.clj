@@ -9,71 +9,104 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
-            [todomvc.mentions :as mentions]
-            [re-html-template.core :refer [define-html-template]]))
+            [re-html-template.core :refer [html]]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
   :wrap-hiccup '(ripley.html/html %)})
 
-(define-html-template todo-item
-  [{:keys [mark-complete mark-incomplete remove]} {:keys [label id complete?]}]
-  {:selector ".todo-list .view"}
+(def ^:const focus-and-place-caret
+  "let e = this.querySelector('.edit'); e.focus(); e.selectionStart = e.selectionEnd = e.value.length;")
 
-  :input.toggle {:prepend-children (list "foo")
-                 :set-attributes {:checked complete?
-                                  :on-change #(if complete?
-                                           (mark-incomplete id)
-                                           (mark-complete id))}}
-  :label {:replace-children label})
+(defn todo-item
+  [{:keys [mark-complete mark-incomplete rename remove]}
+   {:keys [label id complete?]}]
+  (let [edit-atom (atom false)]
+    (html
+     {:selector ".todo-list li"}
 
-(define-html-template todo-form [storage]
-  {:selector ".new-todo"}
+     :li {:set-attributes
+          {:class [::h/live {:source edit-atom
+                             :component #(if % "editing" "")
+                             :did-update #(when % [:eval focus-and-place-caret])}]}}
+     :.view {:set-attributes {:on-dblclick #(reset! edit-atom true)}}
+     :input.toggle {:set-attributes {:checked complete?
+                                     :on-change #(if complete?
+                                                   (mark-incomplete id)
+                                                   (mark-complete id))}}
+     :label {:replace-children label}
+     :.edit {:wrap (do (println "edit juttuja")
+                       (h/html %))
+             :set-attributes {:data-edit-id id
+                              :value label
 
-  :.new-todo {:set-attributes
-              {:on-keypress (js/js-when js/enter-pressed?
-                                        #(p/add-todo storage {:label % :complete? false})
-                                        "window.event.target.value")}})
+                              :on-keydown ["console.log('pressed',window.event.keyCode)"
+                                           (js/js-when js/esc-pressed?
+                                                       #(do
+                                                          (println "edit pois p!")
+                                                          (reset! edit-atom false))
+                                                       )
+                                           (js/js-when js/enter-pressed?
+                                                       #(rename id %)
+                                                       js/change-value)]}}))
 
-(define-html-template footer [storage todos-source]
-  {:selector "footer.footer"}
+  )
 
-  [:.todo-count :strong] {:replace [::h/live
-                                    (p/count-source storage)
-                                    #(h/out! (str %))]}
+(defn todo-form [storage]
+  (html
+   {:selector ".new-todo"}
 
-  {:data-filter "all"}
-  {:set-attributes {:on-click #(p/set-filter! todos-source :all)}}
+   :.new-todo
+   {:set-attributes
+    {:on-keypress [(js/js-when js/enter-pressed?
+                               #(p/add-todo storage {:label % :complete? false})
+                               "window.event.target.value")
+                   ;; Clear it with some js, this could be also
+                   ;; done with a source so that it is only cleared
+                   ;; once the todo has actually been added
+                   "if(window.event.keyCode==13)document.querySelector('.new-todo').value=''"]}}))
 
-  {:data-filter "active"}
-  {:set-attributes {:on-click #(p/set-filter! todos-source :active)}}
+(defn footer [storage todos-source]
+  (html
+   {:selector "footer.footer"}
 
-  {:data-filter "completed"}
-  {:set-attributes {:on-click #(p/set-filter! todos-source :completed)}})
+   [:.todo-count :strong] {:replace [::h/live
+                                     (p/count-source storage)
+                                     #(h/html [:strong %])]}
 
-(define-html-template todomvc [storage todos-source]
-  {:selector "html"}
-  :head {:prepend-children [:link {:rel :stylesheet :href "todomvc.css"}]}
-  :body {:prepend-children (h/live-client-script "/__ripley-live")}
+   {:data-filter "all"}
+   {:set-attributes {:on-click #(p/set-filter! todos-source :all)}}
 
-  ;; The new todo form
-  :.new-todo {:replace (todo-form storage)}
+   {:data-filter "active"}
+   {:set-attributes {:on-click #(p/set-filter! todos-source :active)}}
 
-  ;; List of todos as a live collection
-  :ul.todo-list
-  {:replace
-   (live-collection
-    {:container-element :ul.todo-list
-     :child-element :li
-     :source todos-source
-     :key :id
-     :render (partial todo-item
-                      {:mark-complete (partial p/mark-complete storage)
-                       :mark-incomplete (partial p/mark-incomplete storage)
-                       :remove (partial p/remove-todo storage)})})}
+   {:data-filter "completed"}
+   {:set-attributes {:on-click #(p/set-filter! todos-source :completed)}}))
 
-  ;; Footer filter links
-  :footer.footer {:replace (footer storage todos-source)})
+(defn todomvc [storage todos-source]
+  (html
+   {:selector "html"}
+   :head {:prepend-children [:link {:rel :stylesheet :href "todomvc.css"}]}
+   :body {:prepend-children (h/live-client-script "/__ripley-live")}
+
+   ;; The new todo form
+   :.new-todo {:replace (todo-form storage)}
+
+   ;; List of todos as a live collection
+   :ul.todo-list
+   {:replace
+    (live-collection
+     {:container-element :ul.todo-list
+      :source todos-source
+      :key :id
+      :render (partial todo-item
+                       {:mark-complete (partial p/mark-complete storage)
+                        :mark-incomplete (partial p/mark-incomplete storage)
+                        :remove (partial p/remove-todo storage)
+                        :rename (partial p/rename storage)})})}
+
+   ;; Footer filter links
+   :footer.footer {:replace (footer storage todos-source)}))
 
 (defonce storage nil)
 

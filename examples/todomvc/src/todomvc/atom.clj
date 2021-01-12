@@ -55,6 +55,9 @@
       (atom-source filtered-todos-atom)
       {`p/set-filter! (fn [_ v] (reset! filter-atom v))})))
 
+(defn- rename-todo [todos id new-label]
+  (update-todo todos id assoc :label new-label))
+
 (defrecord TodoAtomStorage [todos]
   p/TodoStorage
   (live-source [_ filter-atom]
@@ -64,6 +67,7 @@
   (add-todo [_ todo] (add-todo todos todo))
   (remove-todo [_ todo-id] (remove-todo todos todo-id))
   (mark-complete [_ todo-id] (mark-complete todos todo-id))
-  (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id)))
+  (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id))
+  (rename [_ todo-id new-label] (rename-todo todos todo-id new-label)))
 
 (defonce storage (delay (->TodoAtomStorage todos)))

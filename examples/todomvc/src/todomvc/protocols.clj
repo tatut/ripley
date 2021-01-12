@@ -9,7 +9,8 @@ todo filter: :all (default), :active (incomplete) or :completed")
   (remove-todo [this todo-id] "Remove todo by id.")
   (mark-complete [this todo-id] "Mark todo by id complete")
   (mark-incomplete [this todo-id] "Mark todo by id incomplete")
-  (count-source [this] "Return source for active todo count"))
+  (count-source [this] "Return source for active todo count")
+  (rename [this todo-id new-label] "Rename this todo with a new label"))
 
 (defprotocol TodoSource
   :extend-via-metadata true
