@@ -99,9 +99,7 @@
   (html
    {:selector "html"}
    :head {:prepend-children
-          [:<>
-           [:link {:rel :stylesheet :href "todomvc.css"}]
-           ]}
+          [:link {:rel :stylesheet :href "todomvc.css"}]}
    :body {:prepend-children [:<>
                              (h/live-client-script "/__ripley-live")
                              (on-hash-change
@@ -109,7 +107,7 @@
                                  "#/active" (p/set-filter! todos-source :active)
                                  "#/" (p/set-filter! todos-source :all)
                                  "#/completed" (p/set-filter! todos-source :completed)
-                                 (println "Routepa muuttu!" %)))]}
+                                 (println "other route:" %)))]}
 
    ;; The new todo form
    :.new-todo {:replace (todo-form storage)}
