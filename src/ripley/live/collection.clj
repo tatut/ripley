@@ -10,6 +10,101 @@
             [clojure.set :as set]
             [clojure.string :as str]))
 
+(defn- diff-ordered
+  "Diff two ordered collections of keys, returns removals
+  additions and the new order of keys.
+
+  Supports removals from any place and additions to between elements.
+  Doesn't support reordering of existing elements."
+  [a-list b-list]
+
+  (let [a-set (into #{} a-list)
+        b-set (into #{} b-list)
+        removed-keys (set/difference a-set b-set)
+        added-keys (set/difference b-set a-set)]
+    {:removed-keys removed-keys
+     :added-keys added-keys
+     :key-order
+     ;; Go through rest of items
+     (loop [a-list (remove removed-keys a-list)
+            b-list b-list
+            keys []]
+       (if (or (seq a-list) (seq b-list))
+         ;; Either list still has elements
+         (let [a (first a-list)
+               b (first b-list)]
+           (cond
+
+             (= a b)
+             (recur (rest a-list)
+                    (rest b-list)
+                    (conj keys a))
+
+             ;; new added item here
+             (not (a-set b))
+             (recur a-list (rest b-list)
+                    (conj keys b))))
+         ;; No more elements in either, return the keys
+         keys))}))
+
+(defn- create-component [ctx render value]
+  (let [ch (async/chan 1)
+        source (ch->source ch)]
+    (async/put! ch value)
+    {:source source
+     :component-id (p/register! ctx source render {})}))
+
+(defn- collection-update-process [collection-id collection-ch key render initial-collection components-by-key]
+  (let [ctx context/*live-context*]
+    (binding [context/*component-id* collection-id]
+      ;; Read the collection source
+      (go-loop [old-collection-by-key (into {} (map (juxt key identity)) initial-collection)
+                old-collection-keys (map key initial-collection)
+                new-collection (<! collection-ch)]
+        (let [new-collection-by-key (into {} (map (juxt key identity)) new-collection)
+              new-collection-keys (map key new-collection)
+
+              ;; Determine keys that are removed or added and the new key order
+              {:keys [removed-keys added-keys key-order]}
+              (diff-ordered old-collection-keys new-collection-keys)]
+
+          (doseq [removed-key removed-keys
+                  :let [source (:source (get @components-by-key removed-key))]]
+            ;; Send tombstone to sources that were removed, so context will send
+            ;; deletion patch
+            (>! (p/to-channel source) :ripley.live/tombstone))
+
+          (loop [last-component-id nil
+                 [key & key-order] key-order]
+            (when key
+              (let [add? (added-keys key)
+                    old-value (get old-collection-by-key key)
+                    new-value (get new-collection-by-key key)]
+                (if add?
+                  ;; This is an added key, add after last-component-id
+                  ;; or prepend item if last-component-id is nil
+                  (let [{new-id :component-id :as component}
+                        (create-component ctx render new-value)]
+                    (swap! components-by-key assoc key component)
+                    (p/send! ctx
+                             (str
+                              (if last-component-id
+                                (str last-component-id ":F:")
+                                (str collection-id ":P:"))
+                              (context/with-component-id new-id
+                                (render-to-string render new-value))))
+                    (recur new-id key-order))
+
+                  ;; Send update if needed, to existing item
+                  (let [{:keys [component-id source]}
+                        (@components-by-key key)]
+                    (when (not= old-value new-value)
+                      (async/put! (p/to-channel source) new-value))
+                    (recur component-id key-order))))))
+
+          (recur new-collection-by-key
+                 new-collection-keys
+                 (<! collection-ch)))))))
 
 (defn live-collection [{:keys [render ; function to render one entity
                                patch ; :append or :prepend for where to render new entities
@@ -23,65 +118,33 @@
         collection-ch (p/to-channel source)
         initial-collection (async/<!! collection-ch)
 
-        ;; Store individual sources for entities in an atom
-        source-by-key (atom (into {}
-                                  (map (juxt key (fn [entity]
-                                                   (let [ch (async/chan 1)]
-                                                     (async/put! ch entity)
-                                                     (ch->source ch)))))
-                                  initial-collection))
-
         ;; Register dummy component as parent, that has no render and will never receive updates
         collection-id (p/register! ctx (ch->source (async/chan 1)) :_ignore {})
 
+
+        ;; Store individual :source and :component-id for entities in an atom
+        components-by-key
+        (atom (into {}
+                    (map (juxt key (partial create-component ctx render)))
+                    initial-collection))
+
         container-element-name (h/element-name container-element)
         container-element-classes (h/element-class-names container-element)]
+
+    (collection-update-process collection-id collection-ch
+                               key render
+                               initial-collection
+                               components-by-key)
 
     (h/out! "<" container-element-name
             (when (seq container-element-classes)
               (str " class=\"" (str/join " " container-element-classes) "\""))
             " id=\"__rl" collection-id "\">")
-    (binding [context/*component-id* collection-id]
-      ;; Read the collection source
-      (go-loop [old-collection-by-key (into {} (map (juxt key identity)) initial-collection)
-                new-collection (<! collection-ch)]
-        (let [new-collection-by-key (into {} (map (juxt key identity)) new-collection)]
-          (doseq [removed-key (set/difference (set (keys old-collection-by-key))
-                                              (set (keys new-collection-by-key)))
-                  :let [source (get @source-by-key removed-key)]]
-            ;; Send tombstone to sources that were removed, so context will send
-            ;; deletion patch
-            (>! (p/to-channel source) :ripley.live/tombstone))
 
-          (doseq [[new-key entity] new-collection-by-key
-                  :let [old-value (get old-collection-by-key new-key ::not-found)]]
-            (cond
-              (= ::not-found old-value)
-              (let [ch (async/chan 1)
-                    source (ch->source ch)
-                    new-id (p/register! ctx source render {})]
-                (p/send! ctx (str collection-id (case patch
-                                                  :append ":A:"
-                                                  :prepend ":P:")
-                                  (context/with-component-id new-id
-                                    (render-to-string render entity))))
-                (swap! source-by-key assoc new-key source))
-
-              (not= old-value entity)
-              (let [source (get @source-by-key new-key)]
-                ;(println "entity " new-key " changed, send to its source")
-                (async/put! (p/to-channel source) entity))))
-          (recur (into {} (map (juxt key identity)) new-collection)
-                 (<! collection-ch))))
-
-      ;; Render live components for each value
-      (let [sources @source-by-key]
-        (doseq [entity initial-collection
-                :let [k (key entity)
-                      source (sources k)
-                      id (p/register! context/*live-context* source render {})]]
-          (context/with-component-id id
-            (render (async/<!! (p/to-channel source)))))))
+    ;; Render live components for each initial value
+    (doseq [[_k {:keys [component-id source]}] @components-by-key]
+      (context/with-component-id component-id
+        (render (async/<!! (p/to-channel source)))))
     (h/out! "</" container-element-name ">")))
 
 (defn- scroll-sensor [callback]
