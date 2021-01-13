@@ -22,6 +22,8 @@ window.ripley = {
             for(var i = 0; i<q.length; i++) {
                 c.send(q[i]);
             }
+            // clear the array
+            q.length = 0;
         };
     },
     onmessage: function(msg) {
