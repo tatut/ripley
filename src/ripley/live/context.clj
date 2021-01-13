@@ -77,7 +77,7 @@
           (do (server/send! (:channel @state) (str id ":D"))
               (p/close! source))
 
-          (when val
+          (when (some? val)
             (let [target-id (if (= patch :attributes)
                               ;; Attributes are sent to the parent element id
                               parent
