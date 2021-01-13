@@ -59,6 +59,11 @@
 (defn- rename-todo [todos id new-label]
   (update-todo todos id assoc :label new-label))
 
+(defn- clear-completed-todos [todos]
+  (swap! todos #(into []
+                      (remove :complete?)
+                      %)))
+
 (defrecord TodoAtomStorage [todos]
   p/TodoStorage
   (live-source [_ filter-atom]
@@ -69,6 +74,7 @@
   (remove-todo [_ todo-id] (remove-todo todos todo-id))
   (mark-complete [_ todo-id] (mark-complete todos todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id))
-  (rename [_ todo-id new-label] (rename-todo todos todo-id new-label)))
+  (rename [_ todo-id new-label] (rename-todo todos todo-id new-label))
+  (clear-completed [_] (clear-completed-todos todos)))
 
 (defonce storage (delay (->TodoAtomStorage todos)))

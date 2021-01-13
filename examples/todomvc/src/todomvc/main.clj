@@ -71,6 +71,9 @@
                                      (p/count-source storage)
                                      #(h/html [:strong %])]}
 
+   :.clear-completed
+   {:set-attributes {:on-click #(p/clear-completed storage)}}
+
    ;; We could handle changing the filter here with :on-click, but we'll
    ;; do it when the hash route changes and just leave these
    ;; as links.
