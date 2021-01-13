@@ -28,7 +28,8 @@
 
      :li {:set-attributes
           {:class [::h/live {:source edit-atom
-                             :component #(if % "editing" "")
+                             :component #(str (when % "editing")
+                                              (when complete? " completed"))
                              :did-update #(when % [:eval focus-and-place-caret])}]}}
      :.view {:set-attributes {:on-dblclick #(reset! edit-atom true)}}
      :input.toggle {:set-attributes {:checked complete?
