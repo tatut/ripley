@@ -103,7 +103,8 @@
    {:selector "html"}
    :head {:prepend-children
           [:link {:rel :stylesheet :href "todomvc.css"}]}
-   :body {:prepend-children [:<>
+   :body {:set-attributes {:on-load "document.querySelector('.new-todo').focus()"}
+          :prepend-children [:<>
                              (h/live-client-script "/__ripley-live")
                              (on-hash-change
                               #(case %
