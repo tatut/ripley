@@ -14,4 +14,5 @@ todo filter: :all (default), :active (incomplete) or :completed")
 
 (defprotocol TodoSource
   :extend-via-metadata true
-  (set-filter! [this filter-value] "Set the filter for the todos"))
+  (set-filter! [this filter-value] "Set the filter for the todos")
+  (current-filter-source [this] "Return a source that returns current filter"))

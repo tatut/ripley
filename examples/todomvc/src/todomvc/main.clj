@@ -6,6 +6,7 @@
             [org.httpkit.server :as server]
             [ripley.live.context :as context]
             [ripley.live.collection :refer [live-collection]]
+            [ripley.live.hash-route :refer [on-hash-change]]
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
@@ -35,20 +36,14 @@
                                                    (mark-incomplete id)
                                                    (mark-complete id))}}
      :label {:replace-children label}
-     :.edit {:wrap (do (println "edit juttuja")
-                       (h/html %))
-             :set-attributes {:data-edit-id id
-                              :value label
-
-                              :on-keydown ["console.log('pressed',window.event.keyCode)"
-                                           (js/js-when js/esc-pressed?
-                                                       #(do
-                                                          (println "edit pois p!")
-                                                          (reset! edit-atom false))
-                                                       )
-                                           (js/js-when js/enter-pressed?
-                                                       #(rename id %)
-                                                       js/change-value)]}}))
+     :.edit {:set-attributes
+             {:data-edit-id id
+              :value label
+              :on-keydown [(js/js-when js/esc-pressed?
+                                       #(reset! edit-atom false))
+                           (js/js-when js/enter-pressed?
+                                       #(rename id %)
+                                       js/change-value)]}}))
 
   )
 
@@ -74,20 +69,45 @@
                                      (p/count-source storage)
                                      #(h/html [:strong %])]}
 
+   ;; We could handle changing the filter here with :on-click, but we'll
+   ;; do it when the hash route changes and just leave these
+   ;; as links.
+   ;; This approach makes back button also work and automatically
+   ;; sets the active filter when reloading the page with a hash
+
    {:data-filter "all"}
-   {:set-attributes {:on-click #(p/set-filter! todos-source :all)}}
+   {:set-attributes
+    {:class [::h/live
+             (p/current-filter-source todos-source)
+             #(when (= :all %) "selected")]}}
 
    {:data-filter "active"}
-   {:set-attributes {:on-click #(p/set-filter! todos-source :active)}}
+   {:set-attributes
+    {:class [::h/live
+             (p/current-filter-source todos-source)
+             #(when (= :active %) "selected")]}}
 
    {:data-filter "completed"}
-   {:set-attributes {:on-click #(p/set-filter! todos-source :completed)}}))
+   {:set-attributes
+    {:class [::h/live
+             (p/current-filter-source todos-source)
+             #(when (= :completed %) "selected")]}}))
 
 (defn todomvc [storage todos-source]
   (html
    {:selector "html"}
-   :head {:prepend-children [:link {:rel :stylesheet :href "todomvc.css"}]}
-   :body {:prepend-children (h/live-client-script "/__ripley-live")}
+   :head {:prepend-children
+          [:<>
+           [:link {:rel :stylesheet :href "todomvc.css"}]
+           ]}
+   :body {:prepend-children [:<>
+                             (h/live-client-script "/__ripley-live")
+                             (on-hash-change
+                              #(case %
+                                 "#/active" (p/set-filter! todos-source :active)
+                                 "#/" (p/set-filter! todos-source :all)
+                                 "#/completed" (p/set-filter! todos-source :completed)
+                                 (println "Routepa muuttu!" %)))]}
 
    ;; The new todo form
    :.new-todo {:replace (todo-form storage)}
