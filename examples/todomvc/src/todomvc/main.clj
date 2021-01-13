@@ -136,9 +136,10 @@
 (def todomvc-routes
   (routes
    (GET "/" _req
-        (h/render-response
-         #(todomvc storage
-                   (p/live-source storage (atom :all)))))
+        (let [storage (storage)]
+          (h/render-response
+           #(todomvc storage
+                     (p/live-source storage (atom :all))))))
    (resources "/")
    (context/connection-handler "/__ripley-live")))
 
@@ -153,9 +154,11 @@
            (server/run-server todomvc-routes {:port 3000}))))
 
 (defn -main [& args]
-  (let [storage-type (or (first args) "atom")]
+  (let [storage-type (or (first args) "atom-per-session")]
     (println "Using storage: " storage-type)
-    (alter-var-root #'storage (constantly (case storage-type
-                                            "pg" @pg-storage/storage
-                                            "atom" @atom-storage/storage)))
+    (alter-var-root #'storage (constantly
+                               (case storage-type
+                                 "pg" (fn [] @pg-storage/storage)
+                                 "atom" (fn [] @atom-storage/storage)
+                                 "atom-per-session" (fn [] (atom-storage/->TodoAtomStorage (atom []))))))
     (restart)))
