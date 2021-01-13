@@ -43,7 +43,9 @@
                                        #(reset! edit-atom false))
                            (js/js-when js/enter-pressed?
                                        #(rename id %)
-                                       js/change-value)]}}))
+                                       js/change-value)]}}
+     :.destroy {:set-attributes
+                {:on-click #(remove id)}}))
 
   )
 
