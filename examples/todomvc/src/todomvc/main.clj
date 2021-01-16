@@ -10,7 +10,8 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
-            [re-html-template.core :refer [html]]))
+            [re-html-template.core :refer [html]]
+            [ripley.live.source :as source]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
@@ -22,6 +23,7 @@
 (defn todo-item
   [{:keys [mark-complete mark-incomplete rename remove]}
    {:keys [label id complete?]}]
+  (println "render todo " id)
   (let [edit-atom (atom false)]
     (html
      {:selector ".todo-list li"}
@@ -117,6 +119,10 @@
    ;; The new todo form
    :.new-todo {:replace (todo-form storage)}
 
+   ;; Skip whole main section when there are no todos
+   :.main {:wrap [::h/when (p/has-todos-source storage)
+                  %]}
+
    ;; List of todos as a live collection
    :ul.todo-list
    {:replace
@@ -162,5 +168,11 @@
                                (case storage-type
                                  "pg" (fn [] @pg-storage/storage)
                                  "atom" (fn [] @atom-storage/storage)
-                                 "atom-per-session" (fn [] (atom-storage/->TodoAtomStorage (atom []))))))
+                                 "atom-per-session"
+                                 (fn []
+                                   (let [a (atom [])]
+                                     (add-watch a ::debug
+                                                (fn [_ _ old new]
+                                                  (println "CHANGE: " old " => " new)))
+                                     (atom-storage/->TodoAtomStorage a))))))
     (restart)))

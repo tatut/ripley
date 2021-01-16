@@ -64,12 +64,17 @@
                       (remove :complete?)
                       %)))
 
+(defn- count-items-source [atom pred]
+  (atom-source atom #(count (filter pred %))))
+
 (defrecord TodoAtomStorage [todos]
   p/TodoStorage
   (live-source [_ filter-atom]
     (filtered-todos-atom-source todos filter-atom))
   (count-source [_]
-    (atom-source todos #(count (filter (complement :complete?) %))))
+    (count-items-source todos (complement :complete?)))
+  (has-todos-source [_]
+    (atom-source todos (comp boolean seq)))
   (add-todo [_ todo] (add-todo todos todo))
   (remove-todo [_ todo-id] (remove-todo todos todo-id))
   (mark-complete [_ todo-id] (mark-complete todos todo-id))
