@@ -8,7 +8,9 @@
             [clojure.core.async :as async]
             ripley.js
             [ripley.impl.output :refer [*html-out*]]
-            [cheshire.core :as cheshire])
+            [cheshire.core :as cheshire]
+            [ripley.live.patch :as patch]
+            [ripley.impl.dynamic :as dynamic])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -75,7 +77,7 @@
     ;; A callback record
     (instance? ripley.js.JSCallback callback)
     (let [invoke-callback-js (str "ripley.send("
-                                  (p/register-callback! context/*live-context*
+                                  (p/register-callback! dynamic/*live-context*
                                                         (:callback-fn callback))
                                   ",[" (str/join "," (:js-params callback)) "])")
           condition (:condition callback)]
@@ -85,7 +87,7 @@
 
     ;; A raw function, register it as callback
     (fn? callback)
-    (str "ripley.send(" (p/register-callback! context/*live-context* callback) ", [])")
+    (str "ripley.send(" (p/register-callback! dynamic/*live-context* callback) ", [])")
 
     ;; Some js expression, return as is
     (string? callback)
@@ -172,8 +174,8 @@
                    [val `(style->str ~val)])]
            (dyn! ~val))
          (out! "\""))
-       (binding [context/*component-id* ~component-live-id]
-         (p/register! context/*live-context* source#
+       (binding [dynamic/*component-id* ~component-live-id]
+         (p/register! dynamic/*live-context* source#
                       (fn [~val]
                         ;; FIXME: handle style compilation if attr is :style
                         (out! (cheshire/encode {~attr (str ~new-val)})))
@@ -200,9 +202,9 @@
            ;; FIXME: do the consume-component-id! only on the FIRST html element
            ;; during this ripley.html/html expansion call to optimize further
            ~(if (seq live-attrs)
-              `(or (context/consume-component-id!)
-                   (p/register! context/*live-context* nil nil {}))
-              `(context/consume-component-id!))]
+              `(or (dynamic/consume-component-id!)
+                   (p/register! dynamic/*live-context* nil nil {}))
+              `(dynamic/consume-component-id!))]
        (out!
         ~(str "<" element))
        (when ~live-id
@@ -275,12 +277,12 @@
                  (do
                    ;; Script is a good placeholder element
                    (out! "<script type=\"ripley/placeholder\" id=\"__rl")
-                   (dyn! (context/consume-component-id!))
+                   (dyn! (dynamic/consume-component-id!))
                    (out! "\"></script>"))
                  (render#)))
 
-             id# (p/register! context/*live-context* test# render-component# {})]
-         (context/with-component-id id#
+             id# (p/register! dynamic/*live-context* test# render-component# {})]
+         (dynamic/with-component-id id#
            (render-component# show?#)))
        ;; This is non-live
        (when test#
@@ -310,12 +312,12 @@
            component# ~(or component
                            `(fn [thing#]
                               (out! (str thing#))))
-           id# (p/register! context/*live-context* source# component#
+           id# (p/register! dynamic/*live-context* source# component#
                             ~(if patch
                                {:patch patch}
                                {}))]
        (if (p/immediate? source#)
-         (context/with-component-id id#
+         (dynamic/with-component-id id#
            (component# (async/<!! (p/to-channel source#))))
 
          ;; Render placeholder now that will be replaced with contents
@@ -469,5 +471,5 @@
 (defn live-client-script [path]
   (html
    [:script
-    (out! (slurp (io/resource "public/live-client.js"))
+    (out! @patch/live-client-script
           "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")]))

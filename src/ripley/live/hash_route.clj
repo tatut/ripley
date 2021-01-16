@@ -1,7 +1,7 @@
 (ns ripley.live.hash-route
   "A live component for reacting to changes in the window location hash."
   (:require [ripley.html :as h]
-            [ripley.live.context :as context]
+            [ripley.impl.dynamic :as dynamic]
             [ripley.live.protocols :as p]))
 
 (defn on-hash-change
@@ -10,7 +10,7 @@
   as parameter."
   [callback]
 
-  (let [callback-id (p/register-callback! context/*live-context*
+  (let [callback-id (p/register-callback! dynamic/*live-context*
                                           callback)]
     (h/out! "<script>"
             " window.onhashchange = function() {"

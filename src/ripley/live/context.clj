@@ -7,31 +7,11 @@
             [cheshire.core :as cheshire]
             [ring.util.io :as ring-io]
             [clojure.java.io :as io]
-            [ripley.impl.output :refer [*html-out*]]))
+            [ripley.impl.output :refer [*html-out*]]
+            [ripley.live.patch :as patch]
+            [ripley.impl.dynamic :as dynamic]))
 
 (set! *warn-on-reflection* true)
-
-(def ^:dynamic *live-context* nil)
-(def ^:dynamic *component-id* nil)
-
-;; Bound to an atom when live components render that contains
-;; the components id. The first element will consume
-;; the id and reset this to nil.
-(def ^:dynamic *output-component-id* nil)
-
-(defn consume-component-id!
-  "Called by HTML rendering to get live id for currently rendering component."
-  []
-  (when *output-component-id*
-    (let [id @*output-component-id*]
-      (reset! *output-component-id* nil)
-      id)))
-
-(defmacro with-component-id [id & body]
-  `(let [id# ~id]
-     (binding [*component-id* id#
-               *output-component-id* (atom id#)]
-       ~@body)))
 
 (defn- cleanup-before-render
   "Cleanup component from context before it is rerendered.
@@ -44,16 +24,6 @@
         (update-in [:components id] assoc :children #{} :callbacks #{})
         (update :components #(reduce dissoc % child-component-ids))
         (update :callbacks #(reduce dissoc % callback-ids)))))
-
-(defn- command-payload [id patch-method payload]
-  (str id
-       (case patch-method
-         :replace ":R:"
-         :append ":A:"
-         :prepend ":P:"
-         :attributes ":@:"
-         :eval ":E:")
-       payload))
 
 (defn- start-component
   "Starts go block for live component updates."
@@ -74,7 +44,8 @@
           ;; source says this component should be removed, send deletion patch to client
           ;; and close the source
           ;; FIXME: don't send deletion patch for :attributes
-          (do (send-fn! (:channel @state) (str id ":D"))
+          (do (send-fn! (:channel @state)
+                        [(patch/delete id)])
               (p/close! source))
 
           (when (some? val)
@@ -82,25 +53,21 @@
                               ;; Attributes are sent to the parent element id
                               parent
                               id)]
-              (binding [*live-context* ctx
+              (binding [dynamic/*live-context* ctx
                         *html-out* (java.io.StringWriter.)]
-                (with-component-id id
+                (dynamic/with-component-id id
                   (try
                     (component val)
-                    (send-fn! (:channel @state)
-                              (command-payload
-                               target-id
-                               patch
-                               (str *html-out*)))
-                    (catch Exception e
-                      (println "Component render threw exception: " e)))))
-              ;; If there is a did-update handler, send that as well
-              ;; PENDING: change format to send multiple commands at once
-              (when-let [[patch payload] (when did-update
+                    (let [patches [(patch/make-patch patch target-id (str *html-out*))]]
+                      (send-fn! (:channel @state)
+                                (if-let [[patch payload]
+                                         (when did-update
                                            (did-update val))]
-                (send-fn! (:channel @state)
-                          (command-payload target-id patch payload))))
-
+                                  ;; If there is a did-update handler, send that as well
+                                  (conj patches (patch/make-patch patch target-id payload))
+                                  patches)))
+                    (catch Exception e
+                      (println "Component render threw exception: " e))))))
 
             (recur (<! ch))))))))
 
@@ -120,9 +87,9 @@
                                               :children #{}
                                               :callbacks #{}}
                                              (select-keys opts [:patch :did-update]))))]
-                (if *component-id*
+                (if dynamic/*component-id*
                   ;; Register new component as child of if we are inside a component
-                  (update-in state [:components *component-id* :children] conj id)
+                  (update-in state [:components dynamic/*component-id* :children] conj id)
                   state)))
 
       ;; Source may be missing (some parent components are registered without their own source)
@@ -139,8 +106,8 @@
       (swap! state #(let [state (-> %
                                     (update :next-id inc)
                                     (update :callbacks assoc id callback))]
-                      (if *component-id*
-                        (update-in state [:components *component-id* :callbacks] conj id)
+                      (if dynamic/*component-id*
+                        (update-in state [:components dynamic/*component-id* :callbacks] conj id)
                         state)))
       id))
 
@@ -172,17 +139,20 @@
    :context-id (java.util.UUID/randomUUID)
    :wait-ch wait-ch})
 
+(defn- default-send-fn! [ch data]
+  (server/send! ch (cheshire/encode data)))
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
   (let [wait-ch (async/chan)
         {id :context-id :as initial-state} (initial-context-state wait-ch)
         state (atom initial-state)
-        ctx (->DefaultLiveContext server/send! state)]
+        ctx (->DefaultLiveContext default-send-fn! state)]
     (ring-io/piped-input-stream
      (fn [out]
        (with-open [w (io/writer out)]
-         (binding [*live-context* ctx
+         (binding [dynamic/*live-context* ctx
                    *html-out* w]
            (try
              (render-fn)
@@ -201,7 +171,7 @@
                      (cleanup-ctx ctx))))))))))))
 
 (defn current-context-id []
-  (:context-id @(:state *live-context*)))
+  (:context-id @(:state dynamic/*live-context*)))
 
 
 (defn connection-handler [uri]

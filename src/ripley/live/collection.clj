@@ -6,10 +6,11 @@
             [ripley.live.protocols :as p]
             [ripley.live.async :refer [ch->source]]
             [clojure.core.async :as async :refer [go-loop <! >!]]
-            [ripley.live.context :as context]
             [clojure.set :as set]
             [clojure.string :as str]
-            [ripley.live.source :as source]))
+            [ripley.live.source :as source]
+            [ripley.impl.dynamic :as dynamic]
+            [ripley.live.patch :as patch]))
 
 (defn- diff-ordered
   "Diff two ordered collections of keys, returns removals
@@ -55,8 +56,8 @@
      :component-id (p/register! ctx source render {})}))
 
 (defn- collection-update-process [collection-id collection-ch key render initial-collection components-by-key]
-  (let [ctx context/*live-context*]
-    (binding [context/*component-id* collection-id]
+  (let [ctx dynamic/*live-context*]
+    (binding [dynamic/*component-id* collection-id]
       ;; Read the collection source
       (go-loop [old-collection-by-key (into {} (map (juxt key identity)) initial-collection)
                 old-collection-keys (map key initial-collection)
@@ -75,8 +76,11 @@
             (>! (p/to-channel source) :ripley.live/tombstone))
 
           (loop [last-component-id nil
-                 [key & key-order] key-order]
-            (when key
+                 [key & key-order] key-order
+                 patches []]
+            (if-not key
+              (when (seq patches)
+                (p/send! ctx patches))
               (let [add? (added-keys key)
                     old-value (get old-collection-by-key key)
                     new-value (get new-collection-by-key key)]
@@ -84,23 +88,22 @@
                   ;; This is an added key, add after last-component-id
                   ;; or prepend item if last-component-id is nil
                   (let [{new-id :component-id :as component}
-                        (create-component ctx render new-value)]
+                        (create-component ctx render new-value)
+                        rendered (dynamic/with-component-id new-id
+                                   (render-to-string render new-value))]
                     (swap! components-by-key assoc key component)
-                    (p/send! ctx
-                             (str
-                              (if last-component-id
-                                (str last-component-id ":F:")
-                                (str collection-id ":P:"))
-                              (context/with-component-id new-id
-                                (render-to-string render new-value))))
-                    (recur new-id key-order))
+                    (recur new-id key-order
+                           (conj patches
+                                 (if last-component-id
+                                   (patch/insert-after last-component-id rendered)
+                                   (patch/prepend collection-id rendered)))))
 
                   ;; Send update if needed, to existing item
                   (let [{:keys [component-id source]}
                         (@components-by-key key)]
                     (when (not= old-value new-value)
                       (async/put! (p/to-channel source) new-value))
-                    (recur component-id key-order))))))
+                    (recur component-id key-order patches))))))
 
           (recur new-collection-by-key
                  new-collection-keys
@@ -114,7 +117,7 @@
                                ]
                         :or {patch :append
                              container-element :span}}]
-  (let [ctx context/*live-context*
+  (let [ctx dynamic/*live-context*
         source (source/source source)
         collection-ch (p/to-channel source)
         initial-collection (async/<!! collection-ch)
@@ -144,7 +147,7 @@
 
     ;; Render live components for each initial value
     (doseq [[_k {:keys [component-id source]}] @components-by-key]
-      (context/with-component-id component-id
+      (dynamic/with-component-id component-id
         (render (async/<!! (p/to-channel source)))))
     (h/out! "</" container-element-name ">")))
 
