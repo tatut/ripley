@@ -79,7 +79,7 @@
     (-> "live-client-template.js" io/resource slurp
         (str/replace
          "__PATCH__"
-         (str "switch(payload) {\n"
+         (str "switch(method) {\n"
               (str/join "\n"
                         (for [type (keys (methods js-eval-script))]
                           (str "case \"" type "\":" (js-eval-script type) " break;")))
