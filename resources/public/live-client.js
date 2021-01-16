@@ -34,7 +34,8 @@ window.ripley = {
         var content = msg.data.substring(idx+3);
         var elt = document.getElementById("__rl"+id);
         if(elt == null) {
-                console.error("Received content for non-existant element: ", id);
+            console.error("Received content for non-existant element: ", id,
+                          "msg:", msg);
         } else {
             switch(method) {
             case "R": elt.outerHTML = content; break; // Replace
