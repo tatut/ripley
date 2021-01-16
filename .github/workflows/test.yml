@@ -10,7 +10,7 @@ jobs:
       with:
         tools-deps: '1.10.1.763'
     - name: run ripley unit tests
-      run: clojure -A:test
+      run: clojure -A:dev:test
     - uses: actions/checkout@v2
       with:
         repository: cypress-io/cypress-example-todomvc
