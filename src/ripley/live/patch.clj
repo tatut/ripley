@@ -64,10 +64,10 @@
   {:type "M"
    :js-eval "elt.insertAdjacentElement(\"afterend\",document.getElementById(\"__rl\"+payload));"})
 
-(define-patch-method set-attributes
+(define-patch-method attributes
   "Set element attributes."
   {:type "@"
-   :js-eval "for(var attr in attrs) { elt.settAttribute(attr,attrs[attr]) }"})
+   :js-eval "for(var attr in payload) { elt.setAttribute(attr,payload[attr]) }"})
 
 (define-patch-method eval-js
   "Eval js with 'this' bound to the live component element"
