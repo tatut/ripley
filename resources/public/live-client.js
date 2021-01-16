@@ -43,6 +43,9 @@ window.ripley = {
             case "P": elt.innerHTML = content + elt.innerHTML; break; // Prepend
             case "D": elt.parentElement.removeChild(elt); break;// Delete
             case "F": elt.insertAdjacentHTML("afterend", content); break; // insert after
+                // Move existing component after this one
+            case "M": elt.insertAdjacentElement("afterend",
+                                                document.getElementById("__rl"+content)); break;
             case "@": {
                 // set attributes
                 var attrs = JSON.parse(content);
