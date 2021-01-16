@@ -263,8 +263,28 @@
   "Compile special :ripley.html/when element."
   [[_ test then :as form]]
   (assert (= 3 (count form)) ":ripley.html/when must have exactly 2 forms: test and then")
-  `(when ~test
-     ~(compile-html then)))
+  `(let [test# ~test
+         render# (fn [] ~(compile-html then))]
+     (if (satisfies? p/Source test#)
+       ;; Live when, compile into live component
+       (let [show?# (and (p/immediate? test#)
+                         (async/<!! (p/to-channel test#)))
+             render-component#
+             (fn [show?#]
+               (if-not show?#
+                 (do
+                   ;; Script is a good placeholder element
+                   (out! "<script type=\"ripley/placeholder\" id=\"__rl")
+                   (dyn! (context/consume-component-id!))
+                   (out! "\"></script>"))
+                 (render#)))
+
+             id# (p/register! context/*live-context* test# render-component# {})]
+         (context/with-component-id id#
+           (render-component# show?#)))
+       ;; This is non-live
+       (when test#
+         (render#)))))
 
 (defn compile-cond
   "Compile special :ripley.html/cond element."
@@ -285,11 +305,7 @@
 (defn compile-live
   "Compile special :ripley.html/live element."
   [live-element]
-  (let [{:keys [source component element patch]} (live-source-and-component live-element)
-        ;; FIXME: not used now, the actual render gives the element
-        element (if element
-                  (name element)
-                  "span")]
+  (let [{:keys [source component patch]} (live-source-and-component live-element)]
     `(let [source# (source/source ~source)
            component# ~(or component
                            `(fn [thing#]
