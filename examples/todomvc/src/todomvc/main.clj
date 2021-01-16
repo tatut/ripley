@@ -153,16 +153,21 @@
 
 (defonce server (atom nil))
 
-(defn- restart []
-  (swap! server
-         (fn [old-server]
-           (when old-server
-             (old-server))
-           (println "Starting todomvc server")
-           (server/run-server todomvc-routes {:port 3000}))))
+(defn- restart
+  ([] (restart 3000))
+  ([port]
+   (swap! server
+          (fn [old-server]
+            (when old-server
+              (old-server))
+            (println "Starting todomvc server")
+            (server/run-server todomvc-routes {:port port})))))
 
-(defn -main [& args]
-  (let [storage-type (or (first args) "atom-per-session")]
+(defn -main [& [storage-type port]]
+  (let [storage-type (or storage-type "atom-per-session")
+        port (if port
+               (Integer/parseInt port)
+               3000)]
     (println "Using storage: " storage-type)
     (alter-var-root #'storage (constantly
                                (case storage-type
@@ -175,4 +180,4 @@
                                                 (fn [_ _ old new]
                                                   (println "CHANGE: " old " => " new)))
                                      (atom-storage/->TodoAtomStorage a))))))
-    (restart)))
+    (restart port)))

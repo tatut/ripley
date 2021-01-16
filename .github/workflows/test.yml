@@ -9,5 +9,11 @@ jobs:
       uses: DeLaGuardo/setup-clojure@master
       with:
         tools-deps: '1.10.1.763'
-    - name: run test
+    - name: run ripley unit tests
       run: clojure -A:test
+    - uses: actions/checkout@v2
+      with:
+        repository: cypress-io/cypress-example-todomvc
+        path: cypress-todomvc
+    - name: run todomvc cypress tests
+      run: bash examples/todomvc/cypress.sh
