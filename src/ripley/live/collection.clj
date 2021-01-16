@@ -8,7 +8,8 @@
             [clojure.core.async :as async :refer [go-loop <! >!]]
             [ripley.live.context :as context]
             [clojure.set :as set]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [ripley.live.source :as source]))
 
 (defn- diff-ordered
   "Diff two ordered collections of keys, returns removals
@@ -47,10 +48,9 @@
          ;; No more elements in either, return the keys
          keys))}))
 
-(defn- create-component [ctx render value]
+(defn- create-component [ctx render _value]
   (let [ch (async/chan 1)
         source (ch->source ch)]
-    (async/put! ch value)
     {:source source
      :component-id (p/register! ctx source render {})}))
 
@@ -115,6 +115,7 @@
                         :or {patch :append
                              container-element :span}}]
   (let [ctx context/*live-context*
+        source (source/source source)
         collection-ch (p/to-channel source)
         initial-collection (async/<!! collection-ch)
 

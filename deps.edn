@@ -4,4 +4,10 @@
         http-kit {:mvn/version "2.4.0-alpha6"}
         ring/ring-core {:mvn/version "1.8.1"}
         cheshire {:mvn/version "5.1.0"}}
- :aliases {:dev {}}}
+ :aliases
+ {:dev {}
+  :test {:extra-paths ["test"]
+         :extra-deps {com.cognitect/test-runner
+                      {:git/url "https://github.com/cognitect-labs/test-runner.git"
+                       :sha "b6b3193fcc42659d7e46ecd1884a228993441182"}}
+         :main-opts ["-m" "cognitect.test-runner"]}}}

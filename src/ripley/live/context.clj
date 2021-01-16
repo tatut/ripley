@@ -57,7 +57,7 @@
 
 (defn- start-component
   "Starts go block for live component updates."
-  [{state :state :as ctx}
+  [{:keys [state send-fn!] :as ctx}
    id
    {:keys [source component patch parent did-update]
     :or {patch :replace}}
@@ -74,7 +74,7 @@
           ;; source says this component should be removed, send deletion patch to client
           ;; and close the source
           ;; FIXME: don't send deletion patch for :attributes
-          (do (server/send! (:channel @state) (str id ":D"))
+          (do (send-fn! (:channel @state) (str id ":D"))
               (p/close! source))
 
           (when (some? val)
@@ -87,25 +87,25 @@
                 (with-component-id id
                   (try
                     (component val)
-                    (server/send! (:channel @state)
-                                  (command-payload
-                                   target-id
-                                   patch
-                                   (str *html-out*)))
+                    (send-fn! (:channel @state)
+                              (command-payload
+                               target-id
+                               patch
+                               (str *html-out*)))
                     (catch Exception e
                       (println "Component render threw exception: " e)))))
               ;; If there is a did-update handler, send that as well
               ;; PENDING: change format to send multiple commands at once
               (when-let [[patch payload] (when did-update
                                            (did-update val))]
-                (server/send! (:channel @state)
-                              (command-payload target-id patch payload))))
+                (send-fn! (:channel @state)
+                          (command-payload target-id patch payload))))
 
 
             (recur (<! ch))))))))
 
 
-(defrecord DefaultLiveContext [state]
+(defrecord DefaultLiveContext [send-fn! state]
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
@@ -152,7 +152,7 @@
 
   (send! [this payload]
     (let [ch (:channel @state)]
-      (server/send! ch payload))))
+      (send-fn! ch payload))))
 
 (defonce current-live-contexts (atom {}))
 
@@ -162,18 +162,23 @@
     (doseq [{source :source} (vals components)]
       (p/close! source))))
 
+(defn initial-context-state
+  "Return initial state for a new context"
+  [wait-ch]
+  {:next-id 0
+   :status :not-connected
+   :components {}
+   :callbacks {}
+   :context-id (java.util.UUID/randomUUID)
+   :wait-ch wait-ch})
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
-  (let [id (java.util.UUID/randomUUID)
-        wait-ch (async/chan)
-        state (atom {:next-id 0
-                     :status :not-connected
-                     :components {}
-                     :callbacks {}
-                     :context-id id
-                     :wait-ch wait-ch})
-        ctx (->DefaultLiveContext state)]
+  (let [wait-ch (async/chan)
+        {id :context-id :as initial-state} (initial-context-state wait-ch)
+        state (atom initial-state)
+        ctx (->DefaultLiveContext server/send! state)]
     (ring-io/piped-input-stream
      (fn [out]
        (with-open [w (io/writer out)]
@@ -208,25 +213,29 @@
          (if-not ctx
            {:status 404
             :body "No such live context"}
-           (do
-             ;; Close the wait-ch so the registered live component go-blocks will start running
-             (async/close! (:wait-ch @(:state ctx)))
-             (server/with-channel req channel
-               (doto channel
-                 (server/on-close (fn [_status]
-                                    (cleanup-ctx ctx)))
-                 (server/on-receive (fn [^String data]
-                                      (let [idx (.indexOf data ":")
-                                            id (Long/parseLong (if (pos? idx)
-                                                                 (subs data 0 idx)
-                                                                 data))
-                                            args (if (pos? idx)
-                                                   (seq (cheshire/decode (subs data (inc idx)) keyword))
-                                                   nil)
-                                            callback (-> ctx :state deref :callbacks (get id))]
-                                        (if-not callback
-                                          (println "Got callback with unrecognized id: " id)
-                                          (apply callback args))))))
+           (server/as-channel
+            req
+            {:on-close
+             (fn [_ch _status]
+               (cleanup-ctx ctx))
+             :on-receive
+             (fn [_ch ^String data]
+               (let [idx (.indexOf data ":")
+                     id (Long/parseLong (if (pos? idx)
+                                          (subs data 0 idx)
+                                          data))
+                     args (if (pos? idx)
+                            (seq (cheshire/decode (subs data (inc idx)) keyword))
+                            nil)
+                     callback (-> ctx :state deref :callbacks (get id))]
+                 (if-not callback
+                   (println "Got callback with unrecognized id: " id)
+                   (apply callback args))))
+             :on-open
+             (fn [ch]
+               ;; Close the wait-ch so the registered live component
+               ;; go-blocks will start running
+               (async/close! (:wait-ch @(:state ctx)))
                (swap! (:state ctx) assoc
-                      :channel channel
-                      :status :connected)))))))))
+                      :channel ch
+                      :status :connected))})))))))
