@@ -84,9 +84,9 @@
    :js-eval "elt.parentElement.insertAdjacentElement(\"beforeend\",elt);"})
 
 (define-patch-method attributes
-  "Set element attributes."
+  "Set element attributes. Nil value removes attribute."
   {:type "@"
-   :js-eval "for(var attr in payload) { elt.setAttribute(attr,payload[attr]) }"
+   :js-eval "for(var attr in payload) { if(payload[attr] === null) { elt.removeAttribute(attr) } else { elt.setAttribute(attr,payload[attr]) }}"
    :target-parent? true
    :render-mode :json})
 
