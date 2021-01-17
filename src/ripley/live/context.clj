@@ -80,21 +80,24 @@
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
-    (let [{wait-ch :wait-ch
-           id :next-id} @state]
-      (swap! state
-             #(let [state (-> %
-                              (update :next-id inc)
-                              (update :components assoc id
-                                      (merge {:source source
-                                              :component component
-                                              :children #{}
-                                              :callbacks #{}}
-                                             (select-keys opts [:patch :did-update]))))]
-                (if dynamic/*component-id*
-                  ;; Register new component as child of if we are inside a component
-                  (update-in state [:components dynamic/*component-id* :children] conj id)
-                  state)))
+    (let [parent-component-id dynamic/*component-id*
+          {wait-ch :wait-ch
+           id :last-component-id}
+          (swap! state
+                 #(let [id (:next-id %)
+                        state (-> %
+                                  (assoc :last-component-id id)
+                                  (update :next-id inc)
+                                  (update :components assoc id
+                                          (merge {:source source
+                                                  :component component
+                                                  :children #{}
+                                                  :callbacks #{}}
+                                                 (select-keys opts [:patch :did-update]))))]
+                    (if parent-component-id
+                      ;; Register new component as child of if we are inside a component
+                      (update-in state [:components parent-component-id :children] conj id)
+                      state)))]
 
       ;; Source may be missing (some parent components are registered without their own source)
       (when source
@@ -106,13 +109,17 @@
       id))
 
   (register-callback! [this callback]
-    (let [id (:next-id @state)]
-      (swap! state #(let [state (-> %
-                                    (update :next-id inc)
-                                    (update :callbacks assoc id callback))]
-                      (if dynamic/*component-id*
-                        (update-in state [:components dynamic/*component-id* :callbacks] conj id)
-                        state)))
+    (let [parent-component-id dynamic/*component-id*
+          {id :last-callback-id}
+          (swap! state
+                 #(let [id (:next-id %)
+                        state (-> %
+                                  (assoc :last-callback-id id)
+                                  (update :next-id inc)
+                                  (update :callbacks assoc id callback))]
+                    (if parent-component-id
+                      (update-in state [:components parent-component-id :callbacks] conj id)
+                      state)))]
       id))
 
   (deregister! [this id]
