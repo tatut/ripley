@@ -10,7 +10,8 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
-            [re-html-template.core :refer [html]]))
+            [re-html-template.core :refer [html]]
+            [clojure.string :as str]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
@@ -43,7 +44,7 @@
               :on-keydown [(js/js-when js/esc-pressed?
                                        #(reset! edit-atom false))
                            (js/js-when js/enter-pressed?
-                                       #(rename id %)
+                                       #(rename id (str/trim %))
                                        js/change-value)]}}
      :.destroy {:set-attributes
                 {:on-click #(remove id)}})))
@@ -55,7 +56,7 @@
    :.new-todo
    {:set-attributes
     {:on-keypress [(js/js-when js/enter-pressed?
-                               #(p/add-todo storage {:label % :complete? false})
+                               #(p/add-todo storage {:label (str/trim %) :complete? false})
                                "window.event.target.value")
                    ;; Clear it with some js, this could be also
                    ;; done with a source so that it is only cleared
