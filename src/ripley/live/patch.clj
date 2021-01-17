@@ -73,6 +73,16 @@
   {:type "M"
    :js-eval "elt.insertAdjacentElement(\"afterend\",document.getElementById(\"__rl\"+payload));"})
 
+(define-patch-method move-first
+  "Move existing child to be the first child of its parent."
+  {:type "<"
+   :js-eval "elt.parentElement.insertAdjacentElement(\"afterbegin\",elt);"})
+
+(define-patch-method move-last
+  "Move existing child to be the last child of its parent."
+  {:type ">"
+   :js-eval "elt.parentElement.insertAdjacentElement(\"beforeend\",elt);"})
+
 (define-patch-method attributes
   "Set element attributes."
   {:type "@"
