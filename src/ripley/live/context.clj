@@ -41,33 +41,37 @@
         (when (= :replace patch)
           (swap! (:state ctx) cleanup-before-render id))
         (if (= val :ripley.live/tombstone)
-          ;; source says this component should be removed, send deletion patch to client
+          ;; source says this component should be removed, send deletion
+          ;; patch to client (unless it targets parent, like attributes)
           ;; and close the source
-          ;; FIXME: don't send deletion patch for :attributes
-          (do (send-fn! (:channel @state)
-                        [(patch/delete id)])
-              (p/close! source))
+          (do
+            (when-not (patch/target-parent? patch)
+              (send-fn! (:channel @state)
+                        [(patch/delete id)]))
+            (p/close! source))
 
           (when (some? val)
-            (let [target-id (if (= patch :attributes)
-                              ;; Attributes are sent to the parent element id
+            (let [target-id (if (patch/target-parent? patch)
                               parent
-                              id)]
-              (binding [dynamic/*live-context* ctx
-                        *html-out* (java.io.StringWriter.)]
-                (dynamic/with-component-id id
-                  (try
-                    (component val)
-                    (let [patches [(patch/make-patch patch target-id (str *html-out*))]]
-                      (send-fn! (:channel @state)
-                                (if-let [[patch payload]
-                                         (when did-update
-                                           (did-update val))]
-                                  ;; If there is a did-update handler, send that as well
-                                  (conj patches (patch/make-patch patch target-id payload))
-                                  patches)))
-                    (catch Exception e
-                      (println "Component render threw exception: " e))))))
+                              id)
+                  payload (try
+                            (case (patch/render-mode patch)
+                              :json (component val)
+                              :html (binding [dynamic/*live-context* ctx
+                                              *html-out* (java.io.StringWriter.)]
+                                      (dynamic/with-component-id id
+                                        (component val)
+                                        (str *html-out*))))
+                            (catch Exception e
+                              (println "Component render threw exception: " e)))
+                  patches [(patch/make-patch patch target-id payload)]]
+              (send-fn! (:channel @state)
+                        (if-let [[patch payload]
+                                 (when did-update
+                                   (did-update val))]
+                          ;; If there is a did-update handler, send that as well
+                          (conj patches (patch/make-patch patch target-id payload))
+                          patches)))
 
             (recur (<! ch))))))))
 

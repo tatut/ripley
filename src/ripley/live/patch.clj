@@ -10,22 +10,31 @@
 (defmulti make-patch "Create a patch message by keyword name"
   (fn [patch-method _id & [_payload]]
     patch-method))
+(defmulti target-parent? identity)
+(defmulti render-mode identity)
 
-(defmacro define-patch-method [name doc {:keys [type js-eval
-                                                               payload?]
-                                                        :or {payload? true}}]
-  (let [pl (when payload? ['payload])]
+(defmacro define-patch-method
+  [name doc {:keys [type js-eval
+                    payload? render-mode target-parent?]
+             :or {payload? true
+                  render-mode :html
+                  target-parent? false}}]
+  (let [pl (when payload? ['payload])
+        kw-name (keyword name)]
     `(do
        (defmethod js-eval-script
          ~type [_#]
          ~js-eval)
 
-       (defmethod make-patch ~(keyword name) [_# id# & [~'payload]]
+       (defmethod make-patch ~kw-name [_# id# & [~'payload]]
          ~@(when payload?
              [`(assert ~'payload ~(str "Patch method " (keyword name)
                                        " (" type ") requires a payload"))])
          [id# ~type ~@(when payload?
                         ['payload])])
+
+       (defmethod target-parent? ~kw-name [_#] ~target-parent?)
+       (defmethod render-mode ~kw-name [_#] ~render-mode)
 
        (defn ~name
          ~doc
@@ -67,7 +76,9 @@
 (define-patch-method attributes
   "Set element attributes."
   {:type "@"
-   :js-eval "for(var attr in payload) { elt.setAttribute(attr,payload[attr]) }"})
+   :js-eval "for(var attr in payload) { elt.setAttribute(attr,payload[attr]) }"
+   :target-parent? true
+   :render-mode :json})
 
 (define-patch-method eval-js
   "Eval js with 'this' bound to the live component element"
