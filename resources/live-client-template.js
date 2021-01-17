@@ -40,6 +40,7 @@ window.ripley = {
             } else {
                 var method = patch[1];
                 var payload = patch[2];
+                if(this.debug) console.log("elt: ", elt, "method: ", method, ", payload: ", payload);
                 __PATCH__
             }
         }
