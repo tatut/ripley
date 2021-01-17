@@ -31,7 +31,7 @@
           {:class [::h/live {:source edit-atom
                              :component #(str (when % "editing")
                                               (when complete? " completed"))
-                             :did-update #(when % [:eval focus-and-place-caret])}]}}
+                             :did-update #(when % [:eval-js focus-and-place-caret])}]}}
      :.view {:set-attributes {:on-dblclick #(reset! edit-atom true)}}
      :input.toggle {:set-attributes {:checked complete?
                                      :on-change #(if complete?
@@ -44,7 +44,10 @@
               :on-keydown [(js/js-when js/esc-pressed?
                                        #(reset! edit-atom false))
                            (js/js-when js/enter-pressed?
-                                       #(rename id (str/trim %))
+                                       #(let [new-label (str/trim %)]
+                                          (if (not= new-label label)
+                                            (rename id (str/trim %))
+                                            (reset! edit-atom false)))
                                        js/change-value)]}}
      :.destroy {:set-attributes
                 {:on-click #(remove id)}})))
