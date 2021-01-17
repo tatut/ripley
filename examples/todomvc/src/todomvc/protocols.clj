@@ -15,7 +15,8 @@ todo filter: :all (default), :active (incomplete) or :completed")
   (has-completed-todos-source [this]
     "Returns boolean source that is true if there are any completed todos")
   (rename [this todo-id new-label] "Rename this todo with a new label")
-  (clear-completed [this] "Remove all completed items"))
+  (clear-completed [this] "Remove all completed items")
+  (toggle-all [this] "Toggle all todos complete? true/false"))
 
 (defprotocol TodoSource
   :extend-via-metadata true

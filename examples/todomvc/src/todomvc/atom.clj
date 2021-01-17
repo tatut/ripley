@@ -68,6 +68,11 @@
 (defn- count-items-source [atom pred]
   (atom-source atom #(count (filter pred %))))
 
+(defn- toggle-all-todos [todos]
+  (let [complete? (boolean
+                   (some (complement :complete?) todos))]
+    (mapv #(assoc % :complete? complete?) todos)))
+
 (defrecord TodoAtomStorage [todos]
   p/TodoStorage
   (live-source [_ filter-atom]
@@ -83,6 +88,7 @@
   (mark-complete [_ todo-id] (mark-complete todos todo-id))
   (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id))
   (rename [_ todo-id new-label] (rename-todo todos todo-id new-label))
-  (clear-completed [_] (clear-completed-todos todos)))
+  (clear-completed [_] (clear-completed-todos todos))
+  (toggle-all [_] (swap! todos toggle-all-todos)))
 
 (defonce storage (delay (->TodoAtomStorage todos)))

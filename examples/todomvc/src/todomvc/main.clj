@@ -143,6 +143,12 @@
    ;; Skip whole main section when there are no todos
    :.main {:wrap [::h/when (p/has-todos-source storage) %]}
 
+   ;; Toggle all
+   :.toggle-all
+   ;; FIXME: set checked if all are complete
+   {:set-attributes {:id "toggle-all" ;; so the label :for works
+                     :on-change #(p/toggle-all storage)}}
+
    ;; List of todos as a live collection
    :ul.todo-list
    {:replace
