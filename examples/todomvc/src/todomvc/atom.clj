@@ -76,6 +76,8 @@
     (count-items-source todos (complement :complete?)))
   (has-todos-source [_]
     (atom-source todos (comp boolean seq)))
+  (has-completed-todos-source [_]
+    (atom-source todos #(boolean (some :complete? %))))
   (add-todo [_ todo] (add-todo todos todo))
   (remove-todo [_ todo-id] (remove-todo todos todo-id))
   (mark-complete [_ todo-id] (mark-complete todos todo-id))

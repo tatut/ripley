@@ -62,16 +62,25 @@
                    ;; once the todo has actually been added
                    "if(window.event.keyCode==13)document.querySelector('.new-todo').value=''"]}}))
 
+(defn todo-count [c]
+  (h/html
+   [:span.todo-count
+    [:strong c]
+    [::h/if (= 1 c)
+     " item "
+     " items "]
+    "left"]))
+
 (defn footer [storage todos-source]
   (html
    {:selector "footer.footer"}
 
-   [:.todo-count :strong] {:replace [::h/live
-                                     (p/count-source storage)
-                                     #(h/html [:strong %])]}
+   :.todo-count
+   {:replace [::h/live (p/count-source storage) todo-count]}
 
    :.clear-completed
-   {:set-attributes {:on-click #(p/clear-completed storage)}}
+   {:wrap [::h/when (p/has-completed-todos-source storage) %]
+    :set-attributes {:on-click #(p/clear-completed storage)}}
 
    ;; We could handle changing the filter here with :on-click, but we'll
    ;; do it when the hash route changes and just leave these
