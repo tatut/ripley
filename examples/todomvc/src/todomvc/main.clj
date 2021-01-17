@@ -11,7 +11,8 @@
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
             [re-html-template.core :refer [html]]
-            [ripley.live.source :as source]))
+            [ripley.live.source :as source]
+            [taoensso.timbre :as log]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
@@ -23,7 +24,6 @@
 (defn todo-item
   [{:keys [mark-complete mark-incomplete rename remove]}
    {:keys [label id complete?]}]
-  (println "render todo " id)
   (let [edit-atom (atom false)]
     (html
      {:selector ".todo-list li"}
@@ -176,8 +176,8 @@
                                  "atom-per-session"
                                  (fn []
                                    (let [a (atom [])]
-                                     (add-watch a ::debug
-                                                (fn [_ _ old new]
-                                                  (println "CHANGE: " old " => " new)))
+                                     #_(add-watch a ::debug
+                                                  (fn [_ _ old new]
+                                                    (log/debug "CHANGE: " old " => " new)))
                                      (atom-storage/->TodoAtomStorage a))))))
     (restart port)))

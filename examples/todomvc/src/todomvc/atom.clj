@@ -1,7 +1,8 @@
 (ns todomvc.atom
   "Todomvc backed by an atom"
   (:require [ripley.live.atom :refer [atom-source]]
-            [todomvc.protocols :as p]))
+            [todomvc.protocols :as p]
+            [taoensso.timbre :as log]))
 
 (def todos (atom [{:label "do this" :complete? true :id 1}
                   {:label "and that" :complete? false :id 2}]))
