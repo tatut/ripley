@@ -10,9 +10,7 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
-            [re-html-template.core :refer [html]]
-            [ripley.live.source :as source]
-            [taoensso.timbre :as log]))
+            [re-html-template.core :refer [html]]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
@@ -48,9 +46,7 @@
                                        #(rename id %)
                                        js/change-value)]}}
      :.destroy {:set-attributes
-                {:on-click #(remove id)}}))
-
-  )
+                {:on-click #(remove id)}})))
 
 (defn todo-form [storage]
   (html
@@ -101,6 +97,19 @@
              (p/current-filter-source todos-source)
              #(when (= :completed %) "selected")]}}))
 
+#_(defn warning [storage]
+  (h/html
+   [:div {:style [::h/live (p/count-source storage)
+                  (fn [c]
+                    {:background-color
+                     (case c
+                       0 "green"
+                       1 "gray"
+                       2 "yellow"
+                       "red")})]}
+    "You have " [::h/live (p/count-source storage)
+                 #(h/html [:span %])] " todos!"]))
+
 (defn todomvc [storage todos-source]
   (html
    {:selector "html"}
@@ -116,12 +125,13 @@
                                  "#/completed" (p/set-filter! todos-source :completed)
                                  (println "other route:" %)))]}
 
+   ;;:.todoapp {:prepend-children (warning storage)}
+
    ;; The new todo form
    :.new-todo {:replace (todo-form storage)}
 
    ;; Skip whole main section when there are no todos
-   :.main {:wrap [::h/when (p/has-todos-source storage)
-                  %]}
+   :.main {:wrap [::h/when (p/has-todos-source storage) %]}
 
    ;; List of todos as a live collection
    :ul.todo-list
@@ -136,8 +146,10 @@
                         :remove (partial p/remove-todo storage)
                         :rename (partial p/rename storage)})})}
 
-   ;; Footer filter links
-   :footer.footer {:replace (footer storage todos-source)}))
+
+   ;; Footer filter links (skip if no todos)
+   :.footer {:wrap [::h/when (p/has-todos-source storage) %]
+             :replace (footer storage todos-source)}))
 
 (defonce storage nil)
 

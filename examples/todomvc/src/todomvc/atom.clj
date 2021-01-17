@@ -55,7 +55,7 @@
     (with-meta
       (atom-source filtered-todos-atom)
       {`p/set-filter! (fn [_ v] (reset! filter-atom v))
-       `p/current-filter-source (constantly filter-atom)})))
+       `p/current-filter-source (fn [_] (atom-source filter-atom))})))
 
 (defn- rename-todo [todos id new-label]
   (update-todo todos id assoc :label new-label))
