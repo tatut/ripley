@@ -10,7 +10,8 @@
             [ripley.impl.output :refer [*html-out*]]
             [cheshire.core :as cheshire]
             [ripley.live.patch :as patch]
-            [ripley.impl.dynamic :as dynamic])
+            [ripley.impl.dynamic :as dynamic]
+            [taoensso.timbre :as log])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -177,8 +178,7 @@
        (binding [dynamic/*component-id* ~component-live-id]
          (p/register! dynamic/*live-context* source#
                       (fn [~val]
-                        ;; FIXME: handle style compilation if attr is :style
-                        (out! (cheshire/encode {~attr (str ~new-val)})))
+                        {~attr (str ~new-val)})
                       {:patch :attributes
                        :parent ~component-live-id
                        :did-update ~did-update})))))
