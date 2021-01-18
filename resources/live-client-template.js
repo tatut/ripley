@@ -29,6 +29,18 @@ window.ripley = {
             q.length = 0;
         };
     },
+    setAttr: function(elt, attr, value) {
+        // set attributes, some are set as properties instead
+        switch(attr) {
+        case "checked": elt.checked = value!==null; break;
+        default:
+            if(value === null) {
+                elt.removeAttribute(attr);
+            } else {
+                elt.setAttribute(attr,value);
+            }
+        }
+    },
     onmessage: function(msg) {
         if(this.debug) console.log("Received:", msg);
         var patches = JSON.parse(msg.data);
