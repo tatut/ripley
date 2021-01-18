@@ -148,7 +148,6 @@
 
    ;; Toggle all
    :.toggle-all
-   ;; FIXME: set checked if all are complete
    {:set-attributes {:checked [::h/live (p/all-completed-source storage)]
                      :on-change #(p/toggle-all storage)}}
 
