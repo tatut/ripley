@@ -156,6 +156,10 @@
     (str/replace (@garden-compile-style [style]) "\n" "")
     style))
 
+(def boolean-attribute?
+  "Attributes that are rendered without value"
+  #{:checked :selected :disabled :readonly :multiple})
+
 (defn- register-live-attr [component-live-id attr live]
   (let [{:keys [source component did-update]} (live-source-and-component live)
         val (gensym "val")
@@ -172,14 +176,21 @@
                [val (list component val)])
            ~@(when (= :style attr)
                [val `(style->str ~val)])]
-       (when (some? ~val)
-         (out! ~(str " " (name attr) "=\""))
-         (dyn! ~val)
-         (out! "\""))
+       ~(if (boolean-attribute? attr)
+          ;; Boolean attribute, output only attr if value is truthy
+          `(when ~val
+             (out! ~(str " " (name attr))))
+          ;; Regular attribute, output with value
+          `(when (some? ~val)
+             (out! ~(str " " (name attr) "=\""))
+             (dyn! ~val)
+             (out! "\"")))
        (binding [dynamic/*component-id* ~component-live-id]
          (p/register! dynamic/*live-context* source#
                       (fn [~val]
-                        {~attr ~new-val})
+                        ~(if (boolean-attribute? attr)
+                           `{~attr (if ~new-val 1 nil)}
+                           `{~attr ~new-val}))
                       {:patch :attributes
                        :parent ~component-live-id
                        :did-update ~did-update})))))
