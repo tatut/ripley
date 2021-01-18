@@ -2,6 +2,9 @@ window.ripley = {
     connection: null,
     debug: false,
     preOpenQueue: [],
+    get: function(id) {
+        return document.querySelector("[data-rl='"+id+"']");
+    },
     send: function(id, args) {
         if(this.debug) console.log("Sending id:", id, ", args: ", args);
         let msg = id+":"+JSON.stringify(args);
@@ -33,7 +36,7 @@ window.ripley = {
         for(var p = 0; p < patchlen; p++) {
             var patch = patches[p];
             var id = patch[0];
-            var elt = document.getElementById("__rl"+id);
+            var elt = ripley.get(id);
             if(elt == null) {
                 console.error("Received content for non-existant element: ", id,
                               "msg:", msg);

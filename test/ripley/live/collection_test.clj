@@ -39,7 +39,7 @@
                 :source items
                 :key :k
                 :container-element :li}))]
-        (is (str/starts-with? output "<li id=\"__rl0\""))
+        (is (str/starts-with? output "<li data-rl=\"0\""))
         (is (str/ends-with? output "</li>")))
 
       ;; Start the live context

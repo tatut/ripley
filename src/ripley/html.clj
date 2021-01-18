@@ -209,7 +209,7 @@
        (out!
         ~(str "<" element))
        (when ~live-id
-         (out! " id=\"__rl" ~live-id "\""))
+         (out! " data-rl=\"" ~live-id "\""))
        ~@(for [[attr val] props
                :let [html-attr (html-attr-name attr)]]
            (if (live-attrs attr)
@@ -277,7 +277,7 @@
                (if-not show?#
                  (do
                    ;; Script is a good placeholder element
-                   (out! "<script type=\"ripley/placeholder\" id=\"__rl")
+                   (out! "<script type=\"ripley/placeholder\" data-rl=\"")
                    (dyn! (dynamic/consume-component-id!))
                    (out! "\"></script>"))
                  (render#)))
@@ -322,7 +322,7 @@
            (component# (async/<!! (p/to-channel source#))))
 
          ;; Render placeholder now that will be replaced with contents
-         (out! ~(str "<span id=\"__rl") id# "\" />")))))
+         (out! ~(str "<span data-rl=\"") id# "\" />")))))
 
 (def compile-special {:<> #'compile-fragment
                       ::let #'compile-let

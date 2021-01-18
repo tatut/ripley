@@ -186,7 +186,7 @@
     (h/out! "<" container-element-name
             (when (seq container-element-classes)
               (str " class=\"" (str/join " " container-element-classes) "\""))
-            " id=\"__rl" collection-id "\">")
+            " data-rl=\"" collection-id "\">")
 
     ;; Render live components for each initial value
     (doseq [[_k {:keys [component-id source]}] @components-by-key]

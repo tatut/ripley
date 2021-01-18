@@ -71,7 +71,7 @@
 (define-patch-method move-after
   "Move existing live component after the end of component."
   {:type "M"
-   :js-eval "elt.insertAdjacentElement(\"afterend\",document.getElementById(\"__rl\"+payload));"})
+   :js-eval "elt.insertAdjacentElement(\"afterend\",ripley.get(payload));"})
 
 (define-patch-method move-first
   "Move existing child to be the first child of its parent."
