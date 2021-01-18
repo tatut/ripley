@@ -208,6 +208,8 @@
         live-attrs (live-attributes props)
         live-id (gensym "live-id")
         props (merge props
+                     (when id
+                       {:id id})
                      (when (seq class-names)
                        {:class (str/join " " class-names)}))]
     `(let [~live-id
