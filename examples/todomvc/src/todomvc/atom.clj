@@ -89,6 +89,7 @@
   (mark-incomplete [_ todo-id] (mark-incomplete todos todo-id))
   (rename [_ todo-id new-label] (rename-todo todos todo-id new-label))
   (clear-completed [_] (clear-completed-todos todos))
-  (toggle-all [_] (swap! todos toggle-all-todos)))
+  (toggle-all [_] (swap! todos toggle-all-todos))
+  (all-completed-source [_] (atom-source todos #(every? :complete? %))))
 
 (defonce storage (delay (->TodoAtomStorage todos)))

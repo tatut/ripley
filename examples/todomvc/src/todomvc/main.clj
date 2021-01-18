@@ -149,7 +149,7 @@
    ;; Toggle all
    :.toggle-all
    ;; FIXME: set checked if all are complete
-   {:set-attributes {:id "toggle-all" ;; so the label :for works
+   {:set-attributes {:checked [::h/live (p/all-completed-source storage)]
                      :on-change #(p/toggle-all storage)}}
 
    ;; List of todos as a live collection
