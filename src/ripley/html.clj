@@ -165,20 +165,21 @@
         new-val (if (= attr :style)
                   `(style->str ~new-val)
                   new-val)]
-    `(let [source# (source/source ~source)]
-       (when (p/immediate? source#) ;; FIXME: don't output if value is nil
-         (out! " " ~(name attr) "=\"")
-         (let [~val (async/<!! (p/to-channel source#))
-               ~@(when component
-                   [val (list component val)])
-               ~@(when (= :style attr)
-                   [val `(style->str ~val)])]
-           (dyn! ~val))
+    `(let [source# (source/source ~source)
+           ~val (when (p/immediate? source#)
+                  (async/<!! (p/to-channel source#)))
+           ~@(when component
+               [val (list component val)])
+           ~@(when (= :style attr)
+               [val `(style->str ~val)])]
+       (when (some? ~val)
+         (out! ~(str " " (name attr) "=\""))
+         (dyn! ~val)
          (out! "\""))
        (binding [dynamic/*component-id* ~component-live-id]
          (p/register! dynamic/*live-context* source#
                       (fn [~val]
-                        {~attr (str ~new-val)})
+                        {~attr ~new-val})
                       {:patch :attributes
                        :parent ~component-live-id
                        :did-update ~did-update})))))
