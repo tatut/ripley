@@ -137,7 +137,8 @@
 (defn- cleanup-ctx [ctx]
   (let [{:keys [context-id components]} @(:state ctx)]
     (swap! current-live-contexts dissoc context-id)
-    (doseq [{source :source} (vals components)]
+    (doseq [{source :source} (vals components)
+            :when source]
       (p/close! source))))
 
 (defn initial-context-state
