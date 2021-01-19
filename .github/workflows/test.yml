@@ -13,7 +13,7 @@ jobs:
       run: clojure -A:dev:test
     - uses: actions/checkout@v2
       with:
-        repository: cypress-io/cypress-example-todomvc
+        repository: tatut/cypress-example-todomvc
         path: cypress-todomvc
     - name: run todomvc cypress tests
       run: bash examples/todomvc/cypress.sh
