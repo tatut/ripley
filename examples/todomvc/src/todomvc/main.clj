@@ -24,10 +24,11 @@
   [{:keys [mark-complete mark-incomplete rename remove]}
    {:keys [label id complete?]}]
   (let [edit-atom (atom false)
-        save! #(let [new-label (str/trim %)]
-                 (if (not= new-label label)
-                   (rename id (str/trim %))
-                   (reset! edit-atom false)))]
+        save! #(when @edit-atom
+                 (let [new-label (str/trim %)]
+                   (if (not= new-label label)
+                     (rename id (str/trim %))
+                     (reset! edit-atom false))))]
     (html
      {:selector ".todo-list li"}
 
