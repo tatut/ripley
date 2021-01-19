@@ -23,7 +23,11 @@
 (defn todo-item
   [{:keys [mark-complete mark-incomplete rename remove]}
    {:keys [label id complete?]}]
-  (let [edit-atom (atom false)]
+  (let [edit-atom (atom false)
+        save! #(let [new-label (str/trim %)]
+                 (if (not= new-label label)
+                   (rename id (str/trim %))
+                   (reset! edit-atom false)))]
     (html
      {:selector ".todo-list li"}
 
@@ -39,16 +43,14 @@
                                                    (mark-complete id))}}
      :label {:replace-children label}
      :.edit {:set-attributes
-             {:data-edit-id id
+             {:id (str "edit" id)
               :value label
+              :on-blur (js/js save! (js/input-value (str "edit" id)))
               :on-keydown [(js/js-when js/esc-pressed?
                                        #(reset! edit-atom false))
                            (js/js-when js/enter-pressed?
-                                       #(let [new-label (str/trim %)]
-                                          (if (not= new-label label)
-                                            (rename id (str/trim %))
-                                            (reset! edit-atom false)))
-                                       js/change-value)]}}
+                                       save!
+                                       (js/input-value (str "edit" id)))]}}
      :.destroy {:set-attributes
                 {:on-click #(remove id)}})))
 
