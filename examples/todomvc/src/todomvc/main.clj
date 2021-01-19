@@ -136,8 +136,8 @@
                              (h/live-client-script "/__ripley-live")
                              (on-hash-change
                               #(case %
+                                 ("" "#/") (p/set-filter! todos-source :all)
                                  "#/active" (p/set-filter! todos-source :active)
-                                 "#/" (p/set-filter! todos-source :all)
                                  "#/completed" (p/set-filter! todos-source :completed)
                                  (println "other route:" %)))]}
 
