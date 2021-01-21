@@ -48,7 +48,9 @@
     (add-watch filter-atom :change-filter
                (fn [_ref _key _old filter-value]
                  (update! @todos-atom filter-value)))
-    (add-watch todos-atom :change-todos
+    ;; FIXME: closing needs to remove these... better way to
+    ;; do filtered atoms, like reagent's reaction
+    (add-watch todos-atom (java.util.UUID/randomUUID)
                (fn [_ref _key _old todos]
                  (update! todos @filter-atom)))
     (update! @todos-atom @filter-atom)
