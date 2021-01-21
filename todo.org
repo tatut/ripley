@@ -1,0 +1,76 @@
+* Source refactoring
+** Make sources listenable by multiple
+*** TODO Refactor away from channels
+
+Channels are pretty cumbersome and not really used properly.
+Complicated UIs with many sources could absolutely be modeled
+as a finite state machine living in a go-block that takes in
+events and sends updated values to sources.
+(need example of this)
+
+But the main source change is easier to handle with just callbacks.
+
+*** TODO Add method to get current value (nil means not immediate)
+
+Instead of determining immediate and getting channel just
+have a method to get current value.
+
+(p/current-value source) => current value or nil
+
+This means sources can't carry nil (same as channels).
+Sources should use special marker if they need to represent
+"unknown" state.
+
+*** TODO Add method to register new listener
+
+Source should have some method like
+(p/listen source (fn [old-value new-value] ...handle change...))
+
+
+* XHR support
+
+WebSockets aren't always available (cumbersome in some cloud
+environments like API gateway). There should be a possibility
+to use a regular JSON endpoint.
+
+This still needs to use sticky sessions if clustering is used
+and there are sources that live in backend memory (like atoms).
+
+** TODO In XHR mode, send sends to mailbox
+
+Add support per client to decide which method to use
+when registering to the context. If client uses XHR
+send appends to the mailbox.
+
+** TODO Route for long polling mailbox
+
+Route and ring handler for fetching events.
+Simply send accumulated messages as JSON array.
+So theres an extra [] around the patches, because
+multiple sources can be changed with one callback
+and the messages are sent almost simultaneously.
+
+When long-polling for new messages, the handler
+should probably wait a few milliseconds to ensure
+all events at the same time will be delivered in the
+same batch (faster than roundtripping again).
+
+GET /__ripley-live?id=<uuid>&last-ts=123123123
+
+Include the session UUI and ts as returned by server
+last time it returned messages.
+
+** TODO Route for invoking callbacks
+A ring handler for invoking callbacks.
+PENDING: should this be the same as polling mailbox?
+Handler could gather all patches from changed sources
+after the callback is handled and return them.
+
+Perhaps simpler to first separate polling mailbox and invoking callbacks.
+
+** TODO live-client variant for XHR
+
+Have a separate live-client-template that is included when
+client is using XHR. The same patch methods are used, but
+the connecting and fetching would be a loop of XHR calls
+to the server.
