@@ -3,28 +3,39 @@ window.ripley = {
     debug: false,
     preOpenQueue: [],
     type: __TYPE__,
+    connected: false,
     get: function(id) {
         return document.querySelector("[data-rl='"+id+"']");
     },
     send: function(id, args) {
         if(this.debug) console.log("Sending id:", id, ", args: ", args);
-        if(this.type === "sse") {
-            var l = window.location;
-            fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
-                  {method: "POST",
-                   headers: {"Content-Type":"application/json"},
-                   body: JSON.stringify([id].concat(args))})
-        } else if(this.type === "ws") {
-
-            let msg = id+":"+JSON.stringify(args);
-            if(this.connection.readyState == 0) {
-                this.preOpenQueue.push(msg);
-            } else {
-                this.connection.send(msg);
-            }
+        if(!this.connected) {
+            this.preOpenQueue.push({id: id, args: args});
         } else {
-            console.err("Unknown connection type: ", this.type);
+            if(this.type === "sse") {
+                var l = window.location;
+                fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
+                      {method: "POST",
+                       headers: {"Content-Type":"application/json"},
+                       body: JSON.stringify([id].concat(args))})
+            } else if(this.type === "ws") {
+                let msg = id+":"+JSON.stringify(args);
+                this.connection.send(msg);
+            } else {
+                console.err("Unknown connection type: ", this.type);
+            }
         }
+    },
+    onopen: function(e) {
+        this.connected = true;
+        let q = this.preOpenQueue;
+        let c = this.connection;
+        for(var i = 0; i<q.length; i++) {
+            let cb = q[i];
+            this.send(cb.id, cb.args);
+        }
+        // clear the array
+        q.length = 0;
     },
     connect: function(path, id) {
         var l = window.location;
@@ -34,21 +45,12 @@ window.ripley = {
             this.connection.onmessage = this.onmessage.bind(this);
             this.cid = id;
             this.cpath = path;
-            // FIXME: send pre open queue
+            this.connection.onopen = this.onopen.bind(this);
         } else if(this.type === "ws") {
-
             var url = (l.protocol=="https:"?"wss://":"ws://")+l.host+path+"?id="+id;
             this.connection = new WebSocket(url);
             this.connection.onmessage = this.onmessage.bind(this);
-            let q = this.preOpenQueue;
-            let c = this.connection;
-            this.connection.onopen = function(e) {
-                for(var i = 0; i<q.length; i++) {
-                    c.send(q[i]);
-                }
-                // clear the array
-                q.length = 0;
-            };
+            this.connection.onopen = this.onopen.bind(this)
         } else {
             console.error("Unknown connection type: ", this.type);
         }
