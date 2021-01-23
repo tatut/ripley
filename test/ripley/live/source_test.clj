@@ -61,3 +61,14 @@
                       (reset! full-source {:first-name "Testy"
                                            :last-name "Testington"
                                            :age 100})))))))))
+
+(deftest use-state
+  (let [[source set-state!] (source/use-state nil)]
+    (p/listen! source
+               (fn [val]
+                 (println val)
+                 (when (< val 42)
+                   (set-state! (inc val)))))
+    (is (= "40\n41\n42\n"
+           (with-out-str
+             (set-state! 40))))))

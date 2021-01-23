@@ -121,7 +121,8 @@
   This can be used to get more granular updates.
 
   The split sources will update only when the keys selected
-  by it are changed in the parent source.
+  by it are changed in the parent source. The value of the
+  parent source should be a map.
   "
   [parent-source & keysets]
   (let [parent-source (source parent-source)]
@@ -138,3 +139,37 @@
                                (listener new-value))))))]
          (->SplitSource source unlisten keyset listeners)))
      keysets)))
+
+(defn use-state
+  "Create a source for local (per page render) state.
+
+  Returns a vector of [value-source set-state!] where
+  the value-source is a source that can be used to read/listen
+  to the value of the state and set-state! is a callback
+  for setting the new state.
+
+  This is meant to be used similar to hooks in some
+  frontend frameworks."
+  [initial-value]
+  (let [listeners (atom #{})
+        state (make-array Object 1)]
+    (aset state 0 initial-value)
+    [;; Source for the value
+     (reify
+       p/Source
+       (current-value [_]
+         (aget state 0))
+       (listen! [_ listener]
+         (swap! listeners conj listener)
+         #(swap! listeners disj listener))
+       (close! [_]
+         (reset! listeners #{})))
+
+     ;; Callback to set the value
+     (fn set-state! [new-state]
+       (locking state
+         (let [old-state (aget state 0)]
+           (when (not= old-state new-state)
+             (aset state 0 new-state)
+             (doseq [listener @listeners]
+               (listener new-state))))))]))

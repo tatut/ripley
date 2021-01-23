@@ -10,6 +10,7 @@
             [todomvc.atom :as atom-storage]
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
+            [ripley.live.protocols :as rp]
             [re-html-template.core :refer [html]]
             [clojure.string :as str]
             [taoensso.timbre :as log]
@@ -25,21 +26,21 @@
 (defn todo-item
   [{:keys [mark-complete mark-incomplete rename remove]}
    {:keys [label id complete?]}]
-  (let [edit-atom (atom false)
-        save! #(when @edit-atom
+  (let [[edit? set-edit!] (source/use-state false)
+        save! #(when (rp/current-value edit?)
                  (let [new-label (str/trim %)]
                    (if (not= new-label label)
                      (rename id (str/trim %))
-                     (reset! edit-atom false))))]
+                     (set-edit! false))))]
     (html
      {:selector ".todo-list li"}
 
      :li {:set-attributes
-          {:class [::h/live {:source edit-atom
+          {:class [::h/live {:source edit?
                              :component #(str (when % "editing")
                                               (when complete? " completed"))
                              :did-update #(when % [:eval-js focus-and-place-caret])}]}}
-     :.view {:set-attributes {:on-dblclick #(reset! edit-atom true)}}
+     :.view {:set-attributes {:on-dblclick #(set-edit! true)}}
      :input.toggle {:set-attributes {:checked complete?
                                      :on-change #(if complete?
                                                    (mark-incomplete id)
@@ -50,7 +51,7 @@
               :value label
               :on-blur (js/js save! (js/input-value (str "edit" id)))
               :on-keydown [(js/js-when js/esc-pressed?
-                                       #(reset! edit-atom false))
+                                       #(set-edit! false))
                            (js/js-when js/enter-pressed?
                                        save!
                                        (js/input-value (str "edit" id)))]}}
