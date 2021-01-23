@@ -407,7 +407,7 @@
                 (when (seq after)
                   (combine-adjacent-string after)))))))
 
-(def ^:private multi-branch-symbols? #{'if 'cond 'case})
+(def ^:private multi-branch-symbols? #{'if 'cond 'case 'if-let})
 
 (defn- multi-branch-form? [x]
   (and (seq? x)
