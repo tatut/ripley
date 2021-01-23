@@ -478,8 +478,15 @@
    :headers {"Content-Type" "text/html"}
    :body (context/render-with-context render-fn)})
 
-(defn live-client-script [path]
-  (html
-   [:script
-    (out! @patch/live-client-script
-          "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")]))
+(defn live-client-script
+  ([path]
+   (live-client-script path :ws))
+  ([path connection-type]
+   (assert (or (= connection-type :ws)
+               (= connection-type :sse))
+           "Supported connection types are WebSocket (:ws) and Server-Sent Events (:sse)")
+   (html
+    [:script
+     (out! (str/replace @patch/live-client-script
+                        "__TYPE__" (str "\"" (name connection-type) "\""))
+           "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")])))

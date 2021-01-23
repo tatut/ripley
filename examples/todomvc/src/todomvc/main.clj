@@ -13,7 +13,6 @@
             [ripley.live.protocols :as rp]
             [re-html-template.core :refer [html]]
             [clojure.string :as str]
-            [taoensso.timbre :as log]
             [ripley.live.source :as source]))
 
 (re-html-template.core/set-global-options!
@@ -137,7 +136,8 @@
             [:link {:rel :stylesheet :href "todomvc.css"}]}
      :body {:set-attributes {:on-load "document.querySelector('.new-todo').focus()"}
             :prepend-children [:<>
-                               (h/live-client-script "/__ripley-live")
+                               ;; Add :sse param here for SSE instead of WS
+                               (h/live-client-script "/__ripley-live" #_:sse)
                                (on-hash-change
                                 #(case %
                                    ("" "#/") (p/set-filter! todos-source :all)

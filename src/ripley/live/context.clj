@@ -152,7 +152,13 @@
    :wait-ch wait-ch})
 
 (defn- default-send-fn! [ch data]
-  (server/send! ch (cheshire/encode data)))
+  (let [data (cheshire/encode data)]
+    (server/send!
+     ch
+     (if (server/websocket? ch)
+       data
+       (str "data: " data "\n\n"))
+     false)))
 
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
@@ -161,6 +167,7 @@
         {id :context-id :as initial-state} (initial-context-state wait-ch)
         state (atom initial-state)
         ctx (->DefaultLiveContext default-send-fn! state)]
+    (swap! current-live-contexts assoc id ctx)
     (ring-io/piped-input-stream
      (fn [out]
        (with-open [w (io/writer out)]
@@ -171,20 +178,32 @@
              (catch Throwable t
                (println "Exception while rendering!" t))
              (finally
-               (when-not (zero? (:next-id @(:state ctx)))
+               (if (empty? (:components @(:state ctx)))
+                 ;; No live components rendered, remove context immediately
+                 (do
+                   (log/debug "No live components, remove context with id: " id)
+                   (swap! current-live-contexts dissoc id))
+
                  ;; Some live components were rendered by the page,
                  ;; add this context as awaiting websocket.
-                 (swap! current-live-contexts assoc id ctx)
                  (go
                    (<! (timeout 30000))
                    (when (= :not-connected (:status @state))
-                     (println "Removing context that wasn't connected within 30 seconds")
+                     (log/info "Removing context that wasn't connected within 30 seconds")
                      (async/close! wait-ch)
                      (cleanup-ctx ctx))))))))))))
 
 (defn current-context-id []
   (:context-id @(:state dynamic/*live-context*)))
 
+(defn- post-callback [ctx body]
+  (let [[id & args] (-> body slurp cheshire/decode)
+        callback (-> ctx :state deref :callbacks (get id))]
+    (if callback
+      (do (apply callback args)
+          {:status 200})
+      {:status 404
+       :body "Unknown callback"})))
 
 (defn connection-handler [uri]
   (params/wrap-params
@@ -195,29 +214,40 @@
          (if-not ctx
            {:status 404
             :body "No such live context"}
-           (server/as-channel
-            req
-            {:on-close
-             (fn [_ch _status]
-               (cleanup-ctx ctx))
-             :on-receive
-             (fn [_ch ^String data]
-               (let [idx (.indexOf data ":")
-                     id (Long/parseLong (if (pos? idx)
-                                          (subs data 0 idx)
-                                          data))
-                     args (if (pos? idx)
-                            (seq (cheshire/decode (subs data (inc idx)) keyword))
-                            nil)
-                     callback (-> ctx :state deref :callbacks (get id))]
-                 (if-not callback
-                   (println "Got callback with unrecognized id: " id)
-                   (apply callback args))))
-             :on-open
-             (fn [ch]
-               ;; Close the wait-ch so the registered live component
-               ;; go-blocks will start running
-               (async/close! (:wait-ch @(:state ctx)))
-               (swap! (:state ctx) assoc
-                      :channel ch
-                      :status :connected))})))))))
+           (if (= :post (:request-method req))
+             (post-callback ctx (:body req))
+             ;; Serve events as WebSocket or SSE
+             (server/as-channel
+              req
+              {:on-close
+               (fn [_ch _status]
+                 (cleanup-ctx ctx))
+               :on-receive
+               (fn [_ch ^String data]
+                 (let [idx (.indexOf data ":")
+                       id (Long/parseLong (if (pos? idx)
+                                            (subs data 0 idx)
+                                            data))
+                       args (if (pos? idx)
+                              (seq (cheshire/decode (subs data (inc idx)) keyword))
+                              nil)
+                       callback (-> ctx :state deref :callbacks (get id))]
+                   (if-not callback
+                     (println "Got callback with unrecognized id: " id)
+                     (apply callback args))))
+               :on-open
+               (fn [ch]
+                 (log/debug "Connected, ws? " (server/websocket? ch))
+                 ;; If connection is not WebSocket, initialize SSE headers
+                 (when-not (server/websocket? ch)
+                   (server/send! ch {:status 200
+                                     :headers {"Content-Type" "text/event-stream"}}
+                                 false))
+
+                 ;; Close the wait-ch so the registered live component
+                 ;; go-blocks will start running
+                 ;; TODO: We shouldn't need this anymore
+                 (async/close! (:wait-ch @(:state ctx)))
+                 (swap! (:state ctx) assoc
+                        :channel ch
+                        :status :connected))}))))))))
