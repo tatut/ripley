@@ -4,42 +4,52 @@
             [clojure.core.async :as async :refer [go >!! >!]]
             [taoensso.timbre :as log]))
 
-(defrecord AtomSource [key source-atom channel]
+(defrecord AtomSource [input-atom process-value key listeners]
   p/Source
-  (to-channel [_] channel)
-  (immediate? [_] true)
+  (current-value [_] (process-value @input-atom))
+  (listen! [_ listener]
+    (swap! listeners conj listener)
+    #(swap! listeners disj listener))
   (close! [_]
-    (remove-watch source-atom key)
-    (async/close! channel)))
+    (reset! listeners #{})
+    (remove-watch input-atom key))
+  p/Writable
+  (write! [_ new-value]
+    (reset! input-atom new-value))
+  Object
+  (toString [_]
+    (str "#<atom-source val: " @input-atom
+         ", " (count @listeners) " listeners>")))
 
 (defn atom-source
   "Create a source that tracks changes made to the given atom.
   The source will return the same channel on each call to to-channel
   so the same source can't be used for multiple live components."
   ([atom-or-opts]
-   (let [{:keys [atom process-value label]}  (if (map? atom-or-opts)
-                                              atom-or-opts
-                                              {:atom atom-or-opts})
+   (let [{input-atom :atom
+          :keys [process-value label]
+          :or {process-value identity}}
+         (if (map? atom-or-opts)
+           atom-or-opts
+           {:atom atom-or-opts})
+
          key (java.util.UUID/randomUUID)
-         ch (async/chan 1
-                        (when process-value
-                          ;; When process value is specified we must also
-                          ;; deduplicate as the processed value may not
-                          ;; change even if atom value changes and we
-                          ;; don't want to rerender then.
-                          (comp (map process-value)
-                                (dedupe)))
-                        (fn [ex]
-                          (log/warn ex "Exception in atom source channel")))]
-     (add-watch atom key
+         listeners (atom #{})
+         update! (fn [old-value new-value]
+                   (let [old (process-value old-value)
+                         new (process-value new-value)]
+                     (when (not= old new)
+                       (doseq [listener @listeners]
+                         (listener new)))))]
+
+     (add-watch input-atom key
                 (fn [_ _ old-value new-value]
                   (when (not= old-value new-value)
                     (when label
                       (log/debug label "atom-source changed, v:" new-value))
-                    (go
-                      (>! ch new-value)))))
-     (>!! ch @atom)
-     (->AtomSource key atom ch)))
+                    (update! old-value new-value))))
+
+     (->AtomSource input-atom process-value key listeners)))
   ([atom process-value]
    (atom-source {:atom atom
                  :process-value process-value})))

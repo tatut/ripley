@@ -17,6 +17,10 @@
       (reset! *output-component-id* nil)
       id)))
 
+(defmacro with-live-context [ctx & body]
+  `(binding [*live-context* ~ctx]
+     ~@body))
+
 (defmacro with-component-id [id & body]
   `(let [id# ~id]
      (binding [*component-id* id#

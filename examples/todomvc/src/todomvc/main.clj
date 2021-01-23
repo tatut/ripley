@@ -11,7 +11,9 @@
             [todomvc.pg :as pg-storage]
             [todomvc.protocols :as p]
             [re-html-template.core :refer [html]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [taoensso.timbre :as log]
+            [ripley.live.source :as source]))
 
 (re-html-template.core/set-global-options!
  {:file "todomvc.html"
@@ -127,50 +129,51 @@
                  #(h/html [:span %])] " todos!"]))
 
 (defn todomvc [storage todos-source]
-  (html
-   {:selector "html"}
-   :head {:prepend-children
-          [:link {:rel :stylesheet :href "todomvc.css"}]}
-   :body {:set-attributes {:on-load "document.querySelector('.new-todo').focus()"}
-          :prepend-children [:<>
-                             (h/live-client-script "/__ripley-live")
-                             (on-hash-change
-                              #(case %
-                                 ("" "#/") (p/set-filter! todos-source :all)
-                                 "#/active" (p/set-filter! todos-source :active)
-                                 "#/completed" (p/set-filter! todos-source :completed)
-                                 (println "other route:" %)))]}
+  (let [has-todos? (p/has-todos-source storage)]
+    (html
+     {:selector "html"}
+     :head {:prepend-children
+            [:link {:rel :stylesheet :href "todomvc.css"}]}
+     :body {:set-attributes {:on-load "document.querySelector('.new-todo').focus()"}
+            :prepend-children [:<>
+                               (h/live-client-script "/__ripley-live")
+                               (on-hash-change
+                                #(case %
+                                   ("" "#/") (p/set-filter! todos-source :all)
+                                   "#/active" (p/set-filter! todos-source :active)
+                                   "#/completed" (p/set-filter! todos-source :completed)
+                                   (println "other route:" %)))]}
 
-   ;;:.todoapp {:prepend-children (warning storage)}
+     ;;:.todoapp {:prepend-children (warning storage)}
 
-   ;; The new todo form
-   :.new-todo {:replace (todo-form storage)}
+     ;; The new todo form
+     :.new-todo {:replace (todo-form storage)}
 
-   ;; Skip whole main section when there are no todos
-   :.main {:wrap [::h/when (p/has-todos-source storage) %]}
+     ;; Skip whole main section when there are no todos
+     :.main {:wrap [::h/when has-todos? %]}
 
-   ;; Toggle all
-   :.toggle-all
-   {:set-attributes {:checked [::h/live (p/all-completed-source storage)]
-                     :on-change #(p/toggle-all storage)}}
+     ;; Toggle all
+     :.toggle-all
+     {:set-attributes {:checked [::h/live (p/all-completed-source storage)]
+                       :on-change #(p/toggle-all storage)}}
 
-   ;; List of todos as a live collection
-   :ul.todo-list
-   {:replace
-    (live-collection
-     {:container-element :ul.todo-list
-      :source todos-source
-      :key :id
-      :render (partial todo-item
-                       {:mark-complete (partial p/mark-complete storage)
-                        :mark-incomplete (partial p/mark-incomplete storage)
-                        :remove (partial p/remove-todo storage)
-                        :rename (partial p/rename storage)})})}
+     ;; List of todos as a live collection
+     :ul.todo-list
+     {:replace
+      (live-collection
+       {:container-element :ul.todo-list
+        :source todos-source
+        :key :id
+        :render (partial todo-item
+                         {:mark-complete (partial p/mark-complete storage)
+                          :mark-incomplete (partial p/mark-incomplete storage)
+                          :remove (partial p/remove-todo storage)
+                          :rename (partial p/rename storage)})})}
 
 
-   ;; Footer filter links (skip if no todos)
-   :.footer {:wrap [::h/when (p/has-todos-source storage) %]
-             :replace (footer storage todos-source)}))
+     ;; Footer filter links (skip if no todos)
+     :.footer {:wrap [::h/when has-todos? %]
+               :replace (footer storage todos-source)})))
 
 (defonce storage nil)
 
@@ -205,7 +208,7 @@
     (alter-var-root #'storage (constantly
                                (case storage-type
                                  "pg" (fn [] @pg-storage/storage)
-                                 "atom" (fn [] @atom-storage/storage)
+                                 "atom" (fn [] @#'atom-storage/storage)
                                  "atom-per-session"
                                  (fn []
                                    (let [a (atom [])]

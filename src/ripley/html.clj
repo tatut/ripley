@@ -8,10 +8,8 @@
             [clojure.core.async :as async]
             ripley.js
             [ripley.impl.output :refer [*html-out*]]
-            [cheshire.core :as cheshire]
             [ripley.live.patch :as patch]
-            [ripley.impl.dynamic :as dynamic]
-            [taoensso.timbre :as log])
+            [ripley.impl.dynamic :as dynamic])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
@@ -170,8 +168,7 @@
                   `(style->str ~new-val)
                   new-val)]
     `(let [source# (source/source ~source)
-           ~val (when (p/immediate? source#)
-                  (async/<!! (p/to-channel source#)))
+           ~val (p/current-value source#)
            ~@(when component
                [val (list component val)])
            ~@(when (= :style attr)
@@ -283,8 +280,7 @@
          render# (fn [] ~(compile-html then))]
      (if (satisfies? p/Source test#)
        ;; Live when, compile into live component
-       (let [show?# (and (p/immediate? test#)
-                         (async/<!! (p/to-channel test#)))
+       (let [show?# (p/current-value test#)
              render-component#
              (fn [show?#]
                (if-not show?#
@@ -330,9 +326,9 @@
                             ~(if patch
                                {:patch patch}
                                {}))]
-       (if (p/immediate? source#)
+       (if-let [val# (p/current-value source#)]
          (dynamic/with-component-id id#
-           (component# (async/<!! (p/to-channel source#))))
+           (component# val#))
 
          ;; Render placeholder now that will be replaced with contents
          (out! ~(str "<span data-rl=\"") id# "\" />")))))

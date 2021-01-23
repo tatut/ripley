@@ -15,6 +15,24 @@ can be closed.")
     "Send command to connected client."))
 
 (defprotocol Source
-  (to-channel [this] "Return core.async channel where this source can be read.")
-  (immediate? [this] "Return true this source can be read immediately when first rendering.")
+  (current-value [this]
+    "Return the current value when first rendering a live component from this source.
+If this source is not immediate (doesn't have value until later), it should
+return nil or some application level marker value.
+
+Avoid blocking as it will slow down page rendering.")
+  (listen! [this callback]
+    "Add new listener callback for this source. When ever the source value
+changes, the listener will be called with the new value.
+The source is responsible for deduping values and not calling listeners
+again if another change has the same value as the last one.
+
+Returns 0-arity function that will remove the listener when called.")
+
   (close! [this] "Close this source and cleanup any server resources."))
+
+;; Source where a value can be written to.
+;; Many sources are just for listening for values, but some have read/write
+;; behaviour (like atoms)
+(defprotocol Writable
+  (write! [this new-value] "Write new value for this source."))

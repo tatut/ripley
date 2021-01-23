@@ -94,4 +94,4 @@
   (toggle-all [_] (swap! todos toggle-all-todos))
   (all-completed-source [_] (atom-source todos #(every? :complete? %))))
 
-(defonce storage (delay (->TodoAtomStorage todos)))
+(def storage (->TodoAtomStorage todos))

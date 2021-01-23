@@ -9,7 +9,8 @@
             [clojure.java.io :as io]
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
-            [ripley.impl.dynamic :as dynamic]))
+            [ripley.impl.dynamic :as dynamic]
+            [taoensso.timbre :as log]))
 
 (set! *warn-on-reflection* true)
 
@@ -25,55 +26,49 @@
         (update :components #(reduce dissoc % child-component-ids))
         (update :callbacks #(reduce dissoc % callback-ids)))))
 
-(defn- start-component
-  "Starts go block for live component updates."
+(defn- update-component!
+  "Callback for source changes that send updates to component."
   [{:keys [state send-fn!] :as ctx}
    id
    {:keys [source component patch parent did-update]
     :or {patch :replace}}
-   wait-ch]
+   val]
 
-  (let [ch (p/to-channel source)]
-    (go
-      (when wait-ch
-        (<! wait-ch))
-      (loop [val (<! ch)]
-        (when (= :replace patch)
-          (swap! (:state ctx) cleanup-before-render id))
-        (if (= val :ripley.live/tombstone)
-          ;; source says this component should be removed, send deletion
-          ;; patch to client (unless it targets parent, like attributes)
-          ;; and close the source
-          (do
-            (when-not (patch/target-parent? patch)
-              (send-fn! (:channel @state)
-                        [(patch/delete id)]))
-            (p/close! source))
+  (log/debug "component " id " has " val)
+  (when (= :replace patch)
+    (swap! (:state ctx) cleanup-before-render id))
+  (if (= val :ripley.live/tombstone)
+    ;; source says this component should be removed, send deletion
+    ;; patch to client (unless it targets parent, like attributes)
+    ;; and close the source
+    (do
+      (when-not (patch/target-parent? patch)
+        (send-fn! (:channel @state)
+                  [(patch/delete id)]))
+      (p/close! source))
 
-          (when (some? val)
-            (let [target-id (if (patch/target-parent? patch)
-                              parent
-                              id)
-                  payload (try
-                            (case (patch/render-mode patch)
-                              :json (component val)
-                              :html (binding [dynamic/*live-context* ctx
-                                              *html-out* (java.io.StringWriter.)]
-                                      (dynamic/with-component-id id
-                                        (component val)
-                                        (str *html-out*))))
-                            (catch Exception e
-                              (println "Component render threw exception: " e)))
-                  patches [(patch/make-patch patch target-id payload)]]
-              (send-fn! (:channel @state)
-                        (if-let [[patch payload]
-                                 (when did-update
-                                   (did-update val))]
-                          ;; If there is a did-update handler, send that as well
-                          (conj patches (patch/make-patch patch target-id payload))
-                          patches)))
-
-            (recur (<! ch))))))))
+    (when (some? val) ;; PENDING: allow nil as value now that we are not using channels
+      (let [target-id (if (patch/target-parent? patch)
+                        parent
+                        id)
+            payload (try
+                      (case (patch/render-mode patch)
+                        :json (component val)
+                        :html (binding [dynamic/*live-context* ctx
+                                        *html-out* (java.io.StringWriter.)]
+                                (dynamic/with-component-id id
+                                  (component val)
+                                  (str *html-out*))))
+                      (catch Exception e
+                        (println "Component render threw exception: " e)))
+            patches [(patch/make-patch patch target-id payload)]]
+        (send-fn! (:channel @state)
+                  (if-let [[patch payload]
+                           (when did-update
+                             (did-update val))]
+                    ;; If there is a did-update handler, send that as well
+                    (conj patches (patch/make-patch patch target-id payload))
+                    patches))))))
 
 
 (defrecord DefaultLiveContext [send-fn! state]
@@ -81,8 +76,7 @@
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
     (let [parent-component-id dynamic/*component-id*
-          {wait-ch :wait-ch
-           id :last-component-id}
+          {id :last-component-id}
           (swap! state
                  #(let [id (:next-id %)
                         state (-> %
@@ -100,15 +94,20 @@
                       state)))]
 
       ;; Source may be missing (some parent components are registered without their own source)
+      ;; If source is present, add listener for it
       (when source
-        (start-component this id
-                         (merge
-                          {:source source :component component}
-                          (select-keys opts [:patch :parent :did-update]))
-                         wait-ch))
+        (let [unlisten
+              (p/listen!
+               source
+               (partial update-component!
+                        this id
+                        (merge
+                         {:source source :component component}
+                         (select-keys opts [:patch :parent :did-update]))))]
+          (swap! state assoc-in [:components id :unlisten] unlisten)))
       id))
 
-  (register-callback! [this callback]
+  (register-callback! [_this callback]
     (let [parent-component-id dynamic/*component-id*
           {id :last-callback-id}
           (swap! state
@@ -122,13 +121,14 @@
                       state)))]
       id))
 
-  (deregister! [this id]
-    (let [[source _comp] (get-in @state [:components id])]
-      (p/close! source)
+  (deregister! [_this id]
+    (let [{:keys [source unlisten]} (get-in @state [:components id])]
+      (when unlisten (unlisten))
+      (when source (p/close! source))
       (swap! state update :components dissoc id)
       nil))
 
-  (send! [this payload]
+  (send! [_this payload]
     (let [ch (:channel @state)]
       (send-fn! ch payload))))
 
@@ -144,7 +144,7 @@
 (defn initial-context-state
   "Return initial state for a new context"
   [wait-ch]
-  {:next-id 0
+  {:next-id (rand-int 1000) ;0
    :status :not-connected
    :components {}
    :callbacks {}
