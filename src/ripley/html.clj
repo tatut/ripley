@@ -407,6 +407,13 @@
                 (when (seq after)
                   (combine-adjacent-string after)))))))
 
+(def ^:private multi-branch-symbols? #{'if 'cond 'case})
+
+(defn- multi-branch-form? [x]
+  (and (seq? x)
+       (multi-branch-symbols? (first x))))
+
+
 (defn- combine-adjacent-out
   "Combine adjacent out! calls.
   (do
@@ -419,16 +426,20 @@
   to further optimize strings.
   "
   [x]
-  (let [[before after] (split-with (complement out-form?) x)]
-    (if (empty? after)
-      before
-      (let [[outs after] (split-with out-form? after)]
-        (concat
-         before
-         (list (concat (list `out!)
-                       (combine-adjacent-string (mapcat rest outs))))
-         (when (seq after)
-           (combine-adjacent-out after)))))))
+  (if (multi-branch-form? x)
+    ;; Don't optimize adjacent positions if there may be multiple
+    ;; branches in play
+    x
+    (let [[before after] (split-with (complement out-form?) x)]
+      (if (empty? after)
+        before
+        (let [[outs after] (split-with out-form? after)]
+          (concat
+           before
+           (list (concat (list `out!)
+                         (combine-adjacent-string (mapcat rest outs))))
+           (when (seq after)
+             (combine-adjacent-out after))))))))
 
 (defn- optimize
   "Optimize compiled HTML forms."
