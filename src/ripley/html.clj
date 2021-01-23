@@ -374,69 +374,72 @@
     (throw (ex-info (str "Can't compile to HTML: " (pr-str body))
                     {:element body}))))
 
+(defn- do-form? [x]
+  (and (seq? x) (= 'do (first x))))
+
 (defn- optimize-nested-do
   "Remove nested do wrappings so next optimizations work better.
   Turns (do a (do b) (do c) d) into (do a b c d)."
-  [[_ & forms]]
-  `(do ~@(mapcat
-          (fn [f]
-            (if (and (seq? f)
-                     (= 'do (first f)))
-              (rest f)
-              [f]))
-          forms)))
+  [form]
+  (if-not (do-form? form)
+    form
+    `(do ~@(mapcat
+            (fn [f]
+              (if (do-form? f)
+                (rest f)
+                [f]))
+            (rest form)))))
 
-(defn- optimize-adjacent-out! [forms]
-  (loop [acc '()
-         out-strings nil
-         forms forms]
-    (if (empty? forms)
-      (concat acc
-              (when (seq out-strings)
-                [`(out! ~(str/join out-strings))]))
-      (let [[f & forms] forms]
-        (if (and (seq? f) (= 'ripley.html/out! (first f)))
-          ;; This is a call to out!
-          (let [[strings rest-forms] (split-with string? (rest f))]
-            (if (seq strings)
-              ;; There's static strings here, move them to out-strings and recur
-              (recur acc
-                     (concat out-strings strings)
-                     (concat (when (seq rest-forms)
-                               [`(out! ~@rest-forms)])
-                             forms))
 
-              ;; No static strings in the beginning here
-              (let [[dynamic-parts rest-forms] (split-with (complement string?) rest-forms)]
-                (recur (concat acc
-                               (when (seq out-strings)
-                                 [`(out! ~(str/join out-strings))])
-                               [`(out! ~@dynamic-parts)])
-                       nil ;; out strings consumed, if any
-                       (if (seq rest-forms)
-                         ;; some more strings here
-                         (concat [`(out! ~@rest-forms)] forms)
-                         forms)))))
+(defn- out-form? [x]
+  (and (seq? x) (= 'ripley.html/out! (first x))))
 
-          ;; This is something else, consume out strings (if any)
-          (recur (concat acc
-                         (when (seq out-strings)
-                           [`(out! ~(str/join out-strings))])
-                         [f])
-                 nil
-                 forms))))))
+(defn- combine-adjacent-string
+  "Combine adjacent string values in list.
+  (\"a\" \"b\" c \"d\") => (\"ab\" c \"c\")"
+  [x]
+  (let [[before after] (split-with (complement string?) x)]
+    (if (empty? after)
+      before
+      (let [[strings after] (split-with string? after)]
+        (concat before
+                (list (str/join strings))
+                (when (seq after)
+                  (combine-adjacent-string after)))))))
+
+(defn- combine-adjacent-out
+  "Combine adjacent out! calls.
+  (do
+   (out! a b)
+   (out! \"c\"))
+  =>
+  (do (out! a b \"c\"))
+
+  Calls combine-adjacent-string on resulting combined out! calls
+  to further optimize strings.
+  "
+  [x]
+  (let [[before after] (split-with (complement out-form?) x)]
+    (if (empty? after)
+      before
+      (let [[outs after] (split-with out-form? after)]
+        (concat
+         before
+         (list (concat (list `out!)
+                       (combine-adjacent-string (mapcat rest outs))))
+         (when (seq after)
+           (combine-adjacent-out after)))))))
 
 (defn- optimize
   "Optimize compiled HTML forms."
-  [optimizations form]
+  [form]
   (walk/postwalk
    (fn [form]
      (if-not (seq? form)
        form
-
-       (if-let [optimization-fn (optimizations (first form))]
-         (optimization-fn form)
-         form)))
+       (-> form
+           optimize-nested-do
+           combine-adjacent-out)))
    form))
 
 (defn- wrap-try [form]
@@ -450,8 +453,7 @@
   [body]
   (->> body
        compile-html
-       (optimize {'do optimize-nested-do})
-       (optimize {'do optimize-adjacent-out!})
+       optimize
        wrap-try))
 
 (comment
