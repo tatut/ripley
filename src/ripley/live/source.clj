@@ -102,3 +102,39 @@
                  (let [prev @prev-value]
                    (reset! prev-value curr-value)
                    (listener prev curr-value))))))
+
+(defrecord SplitSource [parent unlisten keyset listeners]
+  p/Source
+  (current-value [_]
+    (select-keys (p/current-value parent) keyset))
+  (listen! [_ listener]
+    (swap! listeners conj listener)
+    #(swap! listeners disj listener))
+  (close! [_]
+    (unlisten)))
+
+(defn split
+  "Split a source into multiple subsources based on keysets.
+  Returns a vector of subsources in the same order as the
+  keysets.
+
+  This can be used to get more granular updates.
+
+  The split sources will update only when the keys selected
+  by it are changed in the parent source.
+  "
+  [parent-source & keysets]
+  (let [parent-source (source parent-source)]
+    (mapv
+     (fn [keyset]
+       (let [listeners (atom #{})
+             unlisten (listen-with-previous!
+                       parent-source
+                       (fn [old-value new-value]
+                         (let [old-value (select-keys old-value keyset)
+                               new-value (select-keys new-value keyset)]
+                           (when (not= old-value new-value)
+                             (doseq [listener @listeners]
+                               (listener new-value))))))]
+         (->SplitSource source unlisten keyset listeners)))
+     keysets)))

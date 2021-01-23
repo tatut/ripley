@@ -29,3 +29,35 @@
       (is (str/blank?
            (with-out-str
              (swap! a inc)))))))
+
+
+(deftest split
+  (let [full-source (atom {:first-name "Foo" :last-name "Barsky"
+                           :age 42})
+        [name-source age-source] (source/split full-source
+                                               #{:first-name :last-name}
+                                               #{:age})]
+    (p/listen! name-source (fn [{:keys [first-name last-name]}]
+                             (println "NAME:" first-name last-name)))
+    (p/listen! age-source (fn [{:keys [age]}]
+                            (println "AGE:" age)))
+
+    (testing "Changing name will only print name"
+      (is (= "NAME: Bar Barsky\n"
+             (with-out-str
+               (swap! full-source assoc :first-name "Bar")))))
+
+    (testing "Changing age will only print age"
+      (is (= "AGE: 43\n"
+             (with-out-str
+               (swap! full-source update :age inc)))))
+
+    (testing "Changing both will print both"
+      (is (= #{"NAME: Testy Testington"
+               "AGE: 100"}
+             (into #{}
+                   (str/split-lines
+                    (with-out-str
+                      (reset! full-source {:first-name "Testy"
+                                           :last-name "Testington"
+                                           :age 100})))))))))
