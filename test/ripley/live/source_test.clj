@@ -1,10 +1,10 @@
 (ns ripley.live.source-test
-  (:require [ripley.live.source :as source]
+  (:require [ripley.live.source :as source :refer [c=]]
             [clojure.test :as t :refer [deftest testing is]]
             [ripley.live.protocols :as p]
             [clojure.string :as str]))
 
-(deftest simple-computed-test
+(deftest simple-computed
   (let [a (atom 30)
         b (atom 11)
         c (source/computed + (source/to-source a) (source/to-source b))
@@ -30,6 +30,11 @@
            (with-out-str
              (swap! a inc)))))))
 
+(deftest computed-short-hand
+  (let [a (atom 5)
+        b (atom 10)
+        c (c= (* %a %b))]
+    (is (= 50 (p/current-value c)))))
 
 (deftest split
   (let [full-source (atom {:first-name "Foo" :last-name "Barsky"

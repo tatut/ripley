@@ -10,7 +10,8 @@
             ripley.live.atom
             ripley.live.async
             [clojure.core.async :as async :refer [go-loop <! >!]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.walk :as walk]))
 
 (defmulti to-source class)
 
@@ -75,17 +76,41 @@
                       (doseq [listener @listeners]
                         (listener new-value)))))]
 
-    ;; Add listeners for all input sources
-
-
     (->ComputedSource
      f
+     ;; Add listeners for all input sources
      (doall
       (map-indexed (fn [i s]
                      (p/listen! s (partial update! i)))
                    sources))
      input-values
      listeners)))
+
+(defmacro c=
+  "Short hand form for creating computed sources.
+  Takes form to compute. Symbols beginning with % refer
+  to input sources taken from environment.
+
+  Example:
+  ;; Computed source that has two sources: a and b
+  ;; and calculates (* a b) whenever either  input
+  ;; source changes.
+  (c= (* %a %b))
+  "
+  [form]
+  (let [inputs
+        (seq (reduce
+              (fn [inputs x]
+                (if (str/starts-with? (name x) "%")
+                  (assoc inputs x (symbol (subs (name x) 1)))
+                  inputs))
+              {}
+              (filter symbol? (flatten form))))]
+    (assert (seq inputs)
+            "No inputs for computed source.")
+    `(computed (fn [~@(map first inputs)]
+                 ~form)
+               ~@(map second inputs))))
 
 (defn listen-with-previous!
   "Utility for listening to a source while tracking the
