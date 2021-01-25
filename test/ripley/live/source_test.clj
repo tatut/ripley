@@ -77,3 +77,30 @@
     (is (= "40\n41\n42\n"
            (with-out-str
              (set-state! 40))))))
+
+(deftest future-source
+  (let [fut (source/to-source (future
+                                (Thread/sleep 100)
+                                (println "REALIZE")
+                                42))
+        ret (promise)]
+
+    ;; Value is initially nil
+    (is (nil? (p/current-value fut)))
+
+    ;; Listener is called once future is realized
+    (p/listen! fut #(deliver ret %))
+    (is (= @ret 42))
+
+    ;; After that, the current-value is the realized value
+    (is (= 42 (p/current-value fut)))))
+
+(deftest promise-source
+  (let [p (promise)
+        ps (source/to-source p)
+        ret (promise)]
+    (is (nil? (p/current-value ps)))
+    (p/listen! ps #(deliver ret %))
+    (deliver p :done)
+    (is (= :done @ret))
+    (is (= :done (p/current-value ps)))))

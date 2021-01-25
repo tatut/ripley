@@ -13,7 +13,7 @@
             [clojure.string :as str]
             [clojure.walk :as walk]))
 
-(defmulti to-source class)
+(defmulti to-source type)
 
 (defmethod to-source clojure.lang.Atom [a]
   (ripley.live.atom/atom-source a))
@@ -165,6 +165,24 @@
          (->SplitSource source unlisten keyset listeners)))
      keysets)))
 
+(defn- source-with-listeners
+  "Create new source that tracks listeners in a new atom.
+  Returns vector of [source listeners-atom]."
+  [current-value-fn]
+  (let [listeners (atom #{})]
+    [;; Source for the value
+     (reify
+       p/Source
+       (current-value [_]
+         (current-value-fn))
+       (listen! [_ listener]
+         (swap! listeners conj listener)
+         #(swap! listeners disj listener))
+       (close! [_]
+         (reset! listeners #{})))
+
+     listeners]))
+
 (defn use-state
   "Create a source for local (per page render) state.
 
@@ -176,20 +194,10 @@
   This is meant to be used similar to hooks in some
   frontend frameworks."
   [initial-value]
-  (let [listeners (atom #{})
-        state (make-array Object 1)]
+  (let [state (make-array Object 1)
+        [source listeners] (source-with-listeners #(aget state 0))]
     (aset state 0 initial-value)
-    [;; Source for the value
-     (reify
-       p/Source
-       (current-value [_]
-         (aget state 0))
-       (listen! [_ listener]
-         (swap! listeners conj listener)
-         #(swap! listeners disj listener))
-       (close! [_]
-         (reset! listeners #{})))
-
+    [source
      ;; Callback to set the value
      (fn set-state! [new-state]
        (locking state
@@ -198,3 +206,29 @@
              (aset state 0 new-state)
              (doseq [listener @listeners]
                (listener new-state))))))]))
+
+
+(defn- future-source
+  "Source for delay, future or promise."
+  [d]
+  (let [[source listeners]
+        (source-with-listeners
+         #(deref d 0 nil))]
+    ;; Wait for future to complete in another thread and send value
+    (future
+      (println "starting to ")
+      (let [v @d]
+        (doseq [listener @listeners]
+          (listener v))))
+    (println "future started, return source")
+    ;; Return source
+    source))
+
+(def ^:private future-type (type (future 1)))
+(def ^:private promise-type (type (promise)))
+
+(defmethod to-source future-type [f]
+  (future-source f))
+
+(defmethod to-source promise-type [p]
+  (future-source p))
