@@ -54,3 +54,44 @@ All event handling attributes (like `:on-click` or `:on-change`) are registered 
 that are sent via the websocket to the server.
 
 See more details and fully working example in the examples folder.
+
+## Sources
+
+The main abstraction for working with live components in ripley is the Source.
+It provides a way for rendering and to get the current value (if available)
+and allows the live context to listen for changes.
+
+The source value can be an atomic value (like string, number or boolean) or
+a map or collection. The interpretation of the value of the source if entirely
+up to the component that is being rendered.
+
+
+### Built-in sources
+
+Ripley provides built-in sources that integrate regular Clojure
+mechanisms into sources. Built-in sources don't require any external
+extra dependencies.
+
+You can create sources by calling the specific constructor functions
+in `ripley.live.source` namespace or the `to-source` multimethod.
+
+
+| Type | Description |
+| ---- | --- |
+| atom | Regular Clojure atoms. Listens to changes with `add-watch`. See: `use-state` |
+| use-state | Convenient light weight source for per render local state |
+| core.async channel | A core async channel |
+| future | Any future value, if realized by render time, used directly. Otherwise patched in after the result is available. |
+| promise | A promise, if delivered by render time, used directly. Otherwise patched in after the promise is delivered. |
+| computed | Takes one or more input sources and a function. Listens to input sources and calls function with their values to update. See also `c=` convenience macros. |
+| split | Takes a map valued input source and keysets. Distributes changes to sub sources only when their keysets change. |
+
+### Integration sources
+
+Ripley also contains integration sources that integrate external state into usable sources.
+Integration sources may need external dependencies (not provided by ripley)
+see namespace docstring for an integration source in `ripley.integration.<type>`.
+
+| Type | Description |
+| ---- | --- |
+| redis | Integrate Redis pubsub channels as sources (uses carmine library) |
