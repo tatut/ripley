@@ -81,7 +81,6 @@
 (deftest future-source
   (let [fut (source/to-source (future
                                 (Thread/sleep 100)
-                                (println "REALIZE")
                                 42))
         ret (promise)]
 

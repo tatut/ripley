@@ -9,9 +9,7 @@
   (:require [ripley.live.protocols :as p]
             ripley.live.atom
             ripley.live.async
-            [clojure.core.async :as async :refer [go-loop <! >!]]
-            [clojure.string :as str]
-            [clojure.walk :as walk]))
+            [clojure.string :as str]))
 
 (defmulti to-source type)
 
@@ -165,23 +163,29 @@
          (->SplitSource source unlisten keyset listeners)))
      keysets)))
 
-(defn- source-with-listeners
+(defn source-with-listeners
   "Create new source that tracks listeners in a new atom.
-  Returns vector of [source listeners-atom]."
-  [current-value-fn]
-  (let [listeners (atom #{})]
-    [;; Source for the value
-     (reify
-       p/Source
-       (current-value [_]
-         (current-value-fn))
-       (listen! [_ listener]
-         (swap! listeners conj listener)
-         #(swap! listeners disj listener))
-       (close! [_]
-         (reset! listeners #{})))
+  Returns vector of [source listeners-atom].
 
-     listeners]))
+  Meant for implementing new sources."
+  ([current-value-fn]
+   (source-with-listeners current-value-fn nil))
+  ([current-value-fn cleanup-fn]
+   (let [listeners (atom #{})]
+     [;; Source for the value
+      (reify
+        p/Source
+        (current-value [_]
+          (current-value-fn))
+        (listen! [_ listener]
+          (swap! listeners conj listener)
+          #(swap! listeners disj listener))
+        (close! [_]
+          (reset! listeners #{})
+          (when cleanup-fn
+            (cleanup-fn))))
+
+      listeners])))
 
 (defn use-state
   "Create a source for local (per page render) state.
@@ -208,8 +212,8 @@
                (listener new-state))))))]))
 
 
-(defn- future-source
-  "Source for delay, future or promise."
+(defn future-source
+  "Source for future or promise."
   [d]
   (let [[source listeners]
         (source-with-listeners
