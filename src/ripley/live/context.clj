@@ -144,7 +144,7 @@
 (defn initial-context-state
   "Return initial state for a new context"
   [wait-ch]
-  {:next-id (rand-int 1000) ;0
+  {:next-id 0
    :status :not-connected
    :components {}
    :callbacks {}
