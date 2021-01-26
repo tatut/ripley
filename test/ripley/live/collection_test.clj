@@ -1,9 +1,8 @@
 (ns ripley.live.collection-test
   (:require [clojure.test :as t :refer [deftest testing is]]
-            [ripley.live.protocols :as p]
             [ripley.live.context :as context]
             [ripley.live.collection :as collection]
-            [clojure.core.async :as async :refer [>!! <!! alts!!]]
+            [clojure.core.async :as async :refer [alts!!]]
             [ripley.html :as h]
             [ripley.impl.output :refer [*html-out*]]
             [ripley.impl.dynamic :as dynamic]

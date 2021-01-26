@@ -11,5 +11,10 @@
   :test {:extra-paths ["test"]
          :extra-deps {com.cognitect/test-runner
                       {:git/url "https://github.com/cognitect-labs/test-runner.git"
-                       :sha "b6b3193fcc42659d7e46ecd1884a228993441182"}}
-         :main-opts ["-m" "cognitect.test-runner"]}}}
+                       :sha "b6b3193fcc42659d7e46ecd1884a228993441182"}
+                      com.taoensso/carmine {:mvn/version "3.1.0"}}
+         :main-opts ["-m" "cognitect.test-runner"]}
+
+  ;; Profiles for developing integration components
+  :redis {:extra-deps {com.taoensso/carmine {:mvn/version "3.1.0"}}}
+  }}
