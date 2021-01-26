@@ -58,7 +58,7 @@ See more details and fully working example in the examples folder.
 ## Sources
 
 The main abstraction for working with live components in ripley is the Source.
-It provides a way for rendering and to get the current value (if available)
+It provides a way for rendering to get the current value (if available)
 and allows the live context to listen for changes.
 
 The source value can be an atomic value (like string, number or boolean) or
