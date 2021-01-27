@@ -95,3 +95,4 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 | Type | Description |
 | ---- | --- |
 | redis | Integrate Redis pubsub channels as sources (uses carmine library) |
+| manifold | Integrate manifold library `deferred` and `stream` as source |
