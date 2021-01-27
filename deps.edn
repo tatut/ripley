@@ -1,9 +1,9 @@
 {:paths ["src" "resources"]
  :deps {org.apache.commons/commons-lang3 {:mvn/version "3.10"}
         org.clojure/core.async {:mvn/version "1.3.610"}
-        http-kit {:mvn/version "2.4.0-alpha6"}
+        http-kit/http-kit {:mvn/version "2.5.1"}
         ring/ring-core {:mvn/version "1.8.1"}
-        cheshire {:mvn/version "5.1.0"}
+        cheshire/cheshire {:mvn/version "5.1.0"}
         com.taoensso/timbre {:mvn/version "5.1.0"}}
  :aliases
  {:dev {:extra-deps {org.clojure/test.check {:mvn/version "1.1.0"}
@@ -12,9 +12,11 @@
          :extra-deps {com.cognitect/test-runner
                       {:git/url "https://github.com/cognitect-labs/test-runner.git"
                        :sha "b6b3193fcc42659d7e46ecd1884a228993441182"}
-                      com.taoensso/carmine {:mvn/version "3.1.0"}}
+                      com.taoensso/carmine {:mvn/version "3.1.0"}
+                      manifold/manifold {:mvn/version "0.1.9-alpha4"}}
          :main-opts ["-m" "cognitect.test-runner"]}
 
   ;; Profiles for developing integration components
+  ;; Add these also to :test profile so they can be tested in CI
   :redis {:extra-deps {com.taoensso/carmine {:mvn/version "3.1.0"}}}
-  }}
+  :manifold {:extra-deps {manifold/manifold {:mvn/version "0.1.9-alpha4"}}}}}

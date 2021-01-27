@@ -167,7 +167,11 @@
   "Create new source that tracks listeners in a new atom.
   Returns vector of [source listeners-atom].
 
+  Calling ripley.live.protocols/write! on this source will send
+  the written value to all currently registered listeners.
+
   Meant for implementing new sources."
+  ;; FIXME: don't return listeners, pass it to cleanup fn
   ([current-value-fn]
    (source-with-listeners current-value-fn nil))
   ([current-value-fn cleanup-fn]
@@ -183,7 +187,11 @@
         (close! [_]
           (reset! listeners #{})
           (when cleanup-fn
-            (cleanup-fn))))
+            (cleanup-fn)))
+        p/Writable
+        (write! [_ v]
+          (doseq [listener @listeners]
+            (listener v))))
 
       listeners])))
 
@@ -199,7 +207,7 @@
   frontend frameworks."
   [initial-value]
   (let [state (make-array Object 1)
-        [source listeners] (source-with-listeners #(aget state 0))]
+        [source _] (source-with-listeners #(aget state 0))]
     (aset state 0 initial-value)
     [source
      ;; Callback to set the value
@@ -208,22 +216,20 @@
          (let [old-state (aget state 0)]
            (when (not= old-state new-state)
              (aset state 0 new-state)
-             (doseq [listener @listeners]
-               (listener new-state))))))]))
+             (p/write! source new-state)))))]))
 
 
 (defn future-source
   "Source for future or promise."
   [d]
-  (let [[source listeners]
+  (let [[source _]
         (source-with-listeners
          #(deref d 0 nil))]
     ;; Wait for future to complete in another thread and send value
     (future
       (println "starting to ")
       (let [v @d]
-        (doseq [listener @listeners]
-          (listener v))))
+        (p/write! source v)))
     (println "future started, return source")
     ;; Return source
     source))
