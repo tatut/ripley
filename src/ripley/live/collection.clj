@@ -215,19 +215,30 @@
        " var yMax = window.innerHeight; "
        " var y = document.getElementById('" id "').getBoundingClientRect().top;"
        ;;" console.log('hep yMax: ', yMax, ', y: ', y); "
-       " if(0 <= y && y <= yMax) { " (h/register-callback callback) "}"
+       " if(0 <= y && y <= yMax) { "
+       ;;"console.log('fetching'); "
+       (h/register-callback callback) "}"
        "}\n"
        "window.addEventListener('scroll', " g ");")
       (h/out! "</script>")])))
+
+(defn default-loading-indicator []
+  (h/html
+   [:div "Loading..."]))
 
 (defn infinite-scroll [{:keys [render
                                container-element
                                child-element
                                next-batch ;; Function to return the next batch
-                               ]
+                               immediate?
+                               render-loading-indicator]
                         :or {container-element :span
-                             child-element :span}}]
-  (let [[batch-source set-batch!] (source/use-state (next-batch))
+                             child-element :span
+                             immediate? true
+                             render-loading-indicator default-loading-indicator}}]
+  (let [initial-batch (when immediate? (next-batch))
+        [loading-source set-loading!] (source/use-state (not immediate?))
+        [batch-source set-batch!] (source/use-state initial-batch)
         render-batch (fn [items]
                        (doseq [item items]
                          (h/out! "<" (name child-element) ">")
@@ -235,13 +246,25 @@
                          (h/out! "</" (name child-element) ">")))]
 
     (h/out! "<" (name container-element) ">")
-    (render-batch (next-batch))
-
     (h/html
      [:<>
       [::h/live {:source batch-source
                  :component render-batch
-                 :patch :append}]
-      (scroll-sensor #(set-batch! (next-batch)))])
+                 :patch :append}]])
+    (h/out! "</" (name container-element) ">")
 
-    (h/out! "</" (name container-element) ">")))
+    (scroll-sensor
+     #(when (false? (p/current-value loading-source))
+        (set-loading! true)
+        (set-batch! (next-batch))
+        (set-loading! false)))
+
+    (h/html
+     [::h/when loading-source
+      (render-loading-indicator)])
+
+    ;; If not immediate, start fetching 1st batch after render
+    (when-not immediate?
+      (future
+        (set-batch! (next-batch))
+        (set-loading! false)))))
