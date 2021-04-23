@@ -163,6 +163,22 @@
          (->SplitSource source unlisten keyset listeners)))
      keysets)))
 
+(defrecord SourceWithListeners [listeners current-value-fn cleanup-fn]
+  p/Source
+  (current-value [_]
+    (current-value-fn))
+  (listen! [_ listener]
+    (swap! listeners conj listener)
+    #(swap! listeners disj listener))
+  (close! [_]
+    (reset! listeners #{})
+    (when cleanup-fn
+      (cleanup-fn)))
+  p/Writable
+  (write! [_ v]
+    (doseq [listener @listeners]
+      (listener v))))
+
 (defn source-with-listeners
   "Create new source that tracks listeners in a new atom.
   Returns vector of [source listeners-atom].
@@ -175,25 +191,11 @@
   ([current-value-fn]
    (source-with-listeners current-value-fn nil))
   ([current-value-fn cleanup-fn]
-   (let [listeners (atom #{})]
-     [;; Source for the value
-      (reify
-        p/Source
-        (current-value [_]
-          (current-value-fn))
-        (listen! [_ listener]
-          (swap! listeners conj listener)
-          #(swap! listeners disj listener))
-        (close! [_]
-          (reset! listeners #{})
-          (when cleanup-fn
-            (cleanup-fn)))
-        p/Writable
-        (write! [_ v]
-          (doseq [listener @listeners]
-            (listener v))))
-
-      listeners])))
+   (let [listeners (atom #{})
+         source (->SourceWithListeners listeners
+                                       current-value-fn
+                                       cleanup-fn)]
+     [source listeners])))
 
 (defn use-state
   "Create a source for local (per page render) state.
