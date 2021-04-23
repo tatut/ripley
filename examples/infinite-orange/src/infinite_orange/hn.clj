@@ -17,6 +17,9 @@
   (hn-get "topstories.json"))
 
 
+(defn item [id]
+  (hn-get "item/" id ".json"))
+
 (defn top-stories-batches [batch-size]
   (let [[first-batch & batches] (partition-all batch-size (top-stories))
         batches (atom batches)]
@@ -24,6 +27,3 @@
       (let [next-batch (first @batches)]
         (swap! batches rest)
         (mapv item next-batch)))))
-
-(defn item [id]
-  (hn-get "item/" id ".json"))
