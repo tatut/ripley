@@ -18,7 +18,8 @@
 
 (defn news []
   (infinite-scroll {:render news-item
-                    :next-batch (hn/top-stories-batches 10)}))
+                    :next-batch (hn/top-stories-batches 10)
+                    :immediate? false}))
 
 (defn index []
   (h/html
