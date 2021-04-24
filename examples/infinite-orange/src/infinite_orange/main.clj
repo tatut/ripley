@@ -17,9 +17,13 @@
      ]]))
 
 (defn news []
-  (infinite-scroll {:render news-item
-                    :next-batch (hn/top-stories-batches 10)
-                    :immediate? false}))
+  (infinite-scroll
+   {:render news-item
+    :next-batch (hn/top-stories-batches 10)
+    :immediate? false
+    :render-loading-indicator
+    #(h/html
+      [:progress.progress.is-small.is-primary {:max 100}])}))
 
 (defn index []
   (h/html
