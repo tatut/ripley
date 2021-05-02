@@ -9,7 +9,8 @@
   (:require [ripley.live.protocols :as p]
             ripley.live.atom
             ripley.live.async
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.walk :as walk]))
 
 (defmulti to-source type)
 
@@ -96,19 +97,20 @@
   (c= (* %a %b))
   "
   [form]
-  (let [inputs
-        (seq (reduce
-              (fn [inputs x]
-                (if (str/starts-with? (name x) "%")
-                  (assoc inputs x (symbol (subs (name x) 1)))
-                  inputs))
-              {}
-              (filter symbol? (flatten form))))]
-    (assert (seq inputs)
-            "No inputs for computed source.")
-    `(computed (fn [~@(map first inputs)]
-                 ~form)
-               ~@(map second inputs))))
+  (let [inputs (volatile! {})]
+    (walk/prewalk
+     (fn [x]
+       (when (and (symbol? x)
+                  (str/starts-with? (name x) "%"))
+         (vswap! inputs assoc x (symbol (subs (name x) 1))))
+       x)
+     form)
+    (let [inputs @inputs]
+      (assert (seq inputs)
+              "No inputs for computed source.")
+      `(computed (fn [~@(map first inputs)]
+                   ~form)
+                 ~@(map second inputs)))))
 
 (defn listen-with-previous!
   "Utility for listening to a source while tracking the
