@@ -46,7 +46,7 @@
 (define-patch-method replace
   "Replace the whole element's HTML content."
   {:type "R"
-   :js-eval "elt.outerHTML = payload;"})
+   :js-eval "ripley.R(elt,payload);"})
 
 (define-patch-method append
   "Append HTML to the end of element."

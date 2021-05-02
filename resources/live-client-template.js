@@ -85,5 +85,21 @@ window.ripley = {
                 __PATCH__
             }
         }
+    },
+
+    // helper for R patch method to work around SVG issues
+    // PENDING: need similar fix for appends? try to generalize
+    R: function(elt, withContent) {
+        if(elt.namespaceURI === "http://www.w3.org/2000/svg") {
+            // Some browsers (Safari at least) can't use outerHTML
+            // replace as method to patch SVG.
+            var parent = elt.parentElement;
+            var g = document.createElementNS(parent.namespaceURI, parent.tagName);
+            g.innerHTML = withContent;
+            elt.replaceWith(g.firstElementChild);
+        } else {
+            // Simple outerHTML change for HTML elements
+            elt.outerHTML = withContent;
+        }
     }
 }
