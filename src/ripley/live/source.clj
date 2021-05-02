@@ -160,7 +160,7 @@
                            (when (not= old-value new-value)
                              (doseq [listener @listeners]
                                (listener new-value))))))]
-         (->SplitSource source unlisten keyset listeners)))
+         (->SplitSource parent-source unlisten keyset listeners)))
      keysets)))
 
 (defrecord SourceWithListeners [listeners current-value-fn cleanup-fn]
