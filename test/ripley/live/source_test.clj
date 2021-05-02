@@ -47,6 +47,10 @@
     (p/listen! age-source (fn [{:keys [age]}]
                             (println "AGE:" age)))
 
+    (testing "Initial value"
+      (is (= (p/current-value name-source)
+             {:first-name "Foo" :last-name "Barsky"})))
+
     (testing "Changing name will only print name"
       (is (= "NAME: Bar Barsky\n"
              (with-out-str
