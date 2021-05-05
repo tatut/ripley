@@ -4,3 +4,6 @@
 /examples/todomvc/.nrepl-port
 /examples/infinite-orange/.cpcache/
 /examples/infinite-orange/.nrepl-port
+/examples/tictactoe/node_modules
+.cpcache
+.nrepl-port
