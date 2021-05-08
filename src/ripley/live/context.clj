@@ -34,7 +34,7 @@
     :or {patch :replace}}
    val]
 
-  (log/debug "component " id " has " val)
+  (log/trace "component " id " has " val)
   (when (= :replace patch)
     (swap! (:state ctx) cleanup-before-render id))
   (if (= val :ripley.live/tombstone)
