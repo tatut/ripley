@@ -120,6 +120,9 @@
                       (update-in state [:components parent-component-id :callbacks] conj id)
                       state)))]
       id))
+  (register-cleanup! [_this cleanup-fn]
+    (swap! state update :cleanup (fnil conj []) cleanup-fn)
+    nil)
 
   (deregister! [_this id]
     (let [{:keys [source unlisten]} (get-in @state [:components id])]
@@ -135,11 +138,13 @@
 (defonce current-live-contexts (atom {}))
 
 (defn- cleanup-ctx [ctx]
-  (let [{:keys [context-id components]} @(:state ctx)]
+  (let [{:keys [context-id components cleanup]} @(:state ctx)]
     (swap! current-live-contexts dissoc context-id)
     (doseq [{source :source} (vals components)
             :when source]
-      (p/close! source))))
+      (p/close! source))
+    (doseq [c cleanup]
+      (c))))
 
 (defn initial-context-state
   "Return initial state for a new context"
@@ -200,7 +205,8 @@
   (let [[id & args] (-> body slurp cheshire/decode)
         callback (-> ctx :state deref :callbacks (get id))]
     (if callback
-      (do (apply callback args)
+      (do (dynamic/with-live-context ctx
+            (apply callback args))
           {:status 200})
       {:status 404
        :body "Unknown callback"})))
@@ -234,7 +240,8 @@
                        callback (-> ctx :state deref :callbacks (get id))]
                    (if-not callback
                      (println "Got callback with unrecognized id: " id)
-                     (apply callback args))))
+                     (dynamic/with-live-context ctx
+                       (apply callback args)))))
                :on-open
                (fn [ch]
                  (log/debug "Connected, ws? " (server/websocket? ch))

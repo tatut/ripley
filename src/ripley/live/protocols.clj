@@ -11,6 +11,10 @@
 Live component should deregister once no more live updates are coming.
 When all live components on a page have been deregistered, the context and socket
 can be closed.")
+  (register-cleanup! [this cleanup-fn]
+    "Register cleanup fn to run after the current live context client disconnects.
+All cleanup functions are run in the order they are registered and take no
+parameters.")
   (send! [this payload]
     "Send command to connected client."))
 
