@@ -56,6 +56,29 @@
        ;; Update game state
        (update state :game game/turn p position)))))
 
+(defn- shapes []
+  (h/html
+   ;; Define x and o elements
+   [:defs
+    [:path {:id "x"
+            :d (str "M 0.25,0.25"
+                    "L 0.75, 0.75"
+                    "M 0.75, 0.25"
+                    "L 0.25, 0.75")
+            :stroke "black" :stroke-width 0.1}]
+    [:circle {:id "o"
+              :cx 0.5 :cy 0.5 :r 0.25
+              :stroke "black" :stroke-width 0.1}]]))
+
+(defn- grid []
+  ;; show lines to separate grid
+  (h/html
+   [:g
+    [::h/for [[x1 x2 y1 y2] [[0.1 2.9 1 1] [0.1 2.9 2 2]
+                             [1 1 0.1 2.9] [2 2 0.1 2.9]]]
+     [:line {:x1 x1 :x2 x2 :y1 y1 :y2 y2
+             :stroke "black" :stroke-width 0.1}]]]))
+
 (defn game
   "UI to play the game"
   [name game-atom]
@@ -69,8 +92,19 @@
         winner-name (source/c=
                      (let [{winning-player :player} (get-in %game-s [:game :winner])
                            players (:players %players-s)]
-                       (some-> winning-player players)))]
-    (def g game-atom) ;debug
+                       (if (= :tie winning-player)
+                         :tie
+                         (some-> winning-player players))))
+        board-position (fn [x y]
+                         (source/c=
+                          (let [p (+ x (* y 3))
+                                winner (get-in %game-s [:game :winner])]
+                            {:winning-pos? (boolean
+                                            (and (:move winner)
+                                                 ((:move winner) p)))
+                             :x x :y y :p p
+                             :held (get-in %game-s [:game :board p])})))]
+    (def g game-atom) ; debug to inspect current game in repl
     (h/html
      [:div
       [::h/live players-and-turn
@@ -84,43 +118,39 @@
                                (if turn? "font-bold" "font-normal"))}
              name]]]))]
       [:div.flex.justify-center
-       [:svg {:class "w-1/3 h-1/3" :viewBox "0 0 3 3" :fill "white"}
-        ;; show lines to separate grid
-        [::h/for [[x1 x2 y1 y2] [[0.1 2.9 1 1] [0.1 2.9 2 2]
-                                 [1 1 0.1 2.9] [2 2 0.1 2.9]]]
-         [:line {:x1 x1 :x2 x2 :y1 y1 :y2 y2
-                 :stroke "black" :stroke-width 0.1}]]
-        [::h/live game-s
-         (fn [{{board :board winner :winner} :game}]
-           (h/html
-            [:g
-             [::h/for [x (range 3)
-                       y (range 3)
-                       :let [p (+ x (* y 3))
-                             held (nth board p)]]
-              [:g
-               [::h/cond
-                (= held :x) [:path {:d (str "M" (+ x 0.25) "," (+ y 0.25)
-                                            "L" (+ x 0.75) "," (+ y 0.75)
-                                            "M" (+ x 0.75) "," (+ y 0.25)
-                                            "L" (+ x 0.25) "," (+ y 0.75))
-                                    :stroke "black" :stroke-width 0.1}]
-                (= held :o) [:circle {:cx (+ x 0.5) :cy (+ y 0.5) :r 0.25
-                                      :stroke "black" :stroke-width 0.1}]
-                :else [:g]]
-               [::h/if (and (:move winner)
-                            ((:move winner) p))
-                [:rect {:x x :y y :width 1 :height 1 :fill-opacity 0.7
-                        :fill "green"}]
-                [:rect {:x x :y y :width 1 :height 1 :fill-opacity 0
+       [:svg {:class "w-1/3 h-1/3" :viewBox "0 0 3 3" :fill "white"
+              :xmlns:xlink "http://www.w3.org/1999/xlink"}
+        (shapes)
+        (grid)
+        [::h/for [x (range 3)
+                  y (range 3)
+                  :let [pos (board-position x y)]]
+         [::h/live pos
+          (fn [{:keys [x y p held winning-pos?] :as bp}]
+            (let [shape (case held
+                          :x "#x"
+                          :o "#o"
+                          nil)]
+              (h/html
+               [:g
+                [::h/when shape
+                 [:use {:xlink:href shape :x x :y y}]]
+                [::h/cond
+                 winning-pos?
+                 [:rect {:x x :y y :width 1 :height 1 :fill-opacity 0.7
+                         :fill "green"}]
 
-                        :on-click #(turn! name game-atom p)}]]]]]))]]]
+                 (not held)
+                 [:rect {:x x :y y :width 1 :height 1 :fill-opacity 0
+                         :on-click #(turn! name game-atom p)}]]])))]]]]
       [::h/live winner-name
        #(h/html
          [:span
           [::h/when %
            [:div.flex.justify-center.m-4
-            [:div.text-2xl.text-green "Winner is " % "!"]]]])]])))
+            [::h/if (= :tie %)
+             [:div.text-2xl "It's a tie!"]
+             [:div.text-2xl "Winner is " % "!"]]]]])]])))
 
 (defn- generate-code
   "Generate a random 4 character game code"
