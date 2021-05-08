@@ -7,7 +7,9 @@
             [ripley.js :as js]
             [tictactoe.game :as game]
             [ripley.live.source :as source]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [ripley.live.protocols :as p]
+            [ripley.impl.dynamic :as dynamic]))
 
 (defonce server (atom nil))
 
@@ -169,6 +171,11 @@
 (defn- update-game! [code update-fn & args]
   (apply swap! (game-atom code) update-fn args))
 
+(defn- remove-game! [code]
+  ;; We could check here that both players have disconnected
+  ;; before removing, but this is good enough.
+  (swap! games dissoc code))
+
 (defn join-game
   "Create or join a game. Returns game state."
   [name code on-start]
@@ -190,6 +197,7 @@
                       (assoc :game game/new-game
                              :ready? true)
                       (update :on-start conj on-start)))))]
+    (p/register-cleanup! dynamic/*live-context* #(remove-game! code))
     (when (:ready? game)
       ;; game is ready to start (both joined), notify players
       (let [g (game-atom code)]
