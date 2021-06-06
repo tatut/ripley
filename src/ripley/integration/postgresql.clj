@@ -8,8 +8,12 @@
            (java.nio ByteBuffer))
   (:require [clojure.core.async :as async :refer [thread]]
             [taoensso.timbre :as log]
-            [ripley.integration.postgresql.decode :refer [parse-test-decoding-message]]))
+            [ripley.integration.postgresql.decode :refer [parse-test-decoding-message]]
+            [ripley.live.source :as source]
+            [ripley.live.protocols :as p]))
 
+(def ^:private logical-replication-instance
+  "A global logical replication instance for convenience." nil)
 
 (defprotocol LogicalReplication
   (listen-table! [this table-name callback-fn]
@@ -99,10 +103,16 @@ where the row has the specified email address.
   (close! [_this]
     (.close stream)))
 
-(defn- send-event-notifications [listeners {table :table :as event}]
-  (doseq [{:keys [filter callback-fn]} (get listeners table)
+(defn- send-event-notifications [listeners-atom {table :table :as event}]
+  (doseq [{:keys [filter callback-fn] :as listener} (get @listeners-atom table)
           :when (filter event)]
-    (callback-fn event)))
+    (try
+      (callback-fn event)
+      (catch Throwable t
+        (log/error t "Error in replication change listener for table " table ". Disabling listener!")
+        (swap! listeners-atom update table
+               (fn [table-listeners]
+                 (filterv #(not= listener %) table-listeners)))))))
 
 (defn initialize-logical-replication
   "Initialize a logical replication connection.
@@ -148,23 +158,48 @@ where the row has the specified email address.
                           (String. arr offset len)))
         listeners (atom {})]
     (thread
-      (log/info "Start reading logical replication stream for slot: "
-                replication-slot-name)
-      (loop [msg (read-pending)]
-        (if (nil? msg)
-          (.sleep TimeUnit/MILLISECONDS 10)
-          (let [msg (parse-test-decoding-message msg)]
-            (when msg
-              (send-event-notifications @listeners msg))
-            (.setAppliedLSN stream (.getLastReceiveLSN stream))
-            (.setFlushedLSN stream (.getLastReceiveLSN stream))))
-          (when-not (.isClosed stream)
-            (recur (read-pending))))
+      (try
+        (log/info "Start reading logical replication stream for slot: "
+                  replication-slot-name)
+        (loop [msg (read-pending)
+               last-lsn nil]
+          (if (nil? msg)
+            (do
+              (.sleep TimeUnit/MILLISECONDS 10)
+              (when-not (.isClosed stream)
+                (recur (read-pending) last-lsn)))
+            (do
+              (log/debug "REPLICATION MSG: " msg)
+              (let [msg (parse-test-decoding-message msg)
+                    last-rcv-lsn (.getLastReceiveLSN stream)]
+                (when msg
+                  (send-event-notifications listeners msg))
+                (when (not= last-lsn last-rcv-lsn)
+                  (.setAppliedLSN stream last-rcv-lsn)
+                  (.setFlushedLSN stream last-rcv-lsn))
+                (when-not (.isClosed stream)
+                  (recur (read-pending) last-rcv-lsn))))))
+        (catch Throwable t
+          (log/error t "Error in logical replication read thread.")))
       (log/info "Logical replication stream was closed for slot: "
                 replication-slot-name))
 
     (->LogicalReplicationStream stream listeners)))
 
+(defn start!
+  "Starts logical replication and sets the global instance.
+  See [[initialize-logical-replication]] for options."
+  [opts]
+  (alter-var-root #'logical-replication-instance
+                  (constantly (initialize-logical-replication opts))))
+
+(defn stop!
+  "Stops the global logical replication instance."
+  []
+  (alter-var-root #'logical-replication-instance
+                  (fn [instance]
+                    (close! instance)
+                    nil)))
 
 
 (comment
@@ -185,3 +220,106 @@ where the row has the specified email address.
     (listen-table! lr "public.testi" (fn [event]
                                        (def *event event)
                                        (println "GOT EVENT: " (pr-str event))))))
+
+(defn collection-source
+  "Collection that is backed by a SQL query and automatically
+  updates based on changes.
+
+  Options:
+  :logical-replication  a LogicalReplication instance. If omitted the global
+                        instance is used.
+  :initial-state        a collection of initial rows (or future if
+                        source is not immediate)
+  :changes              collection of change listeners that react to database
+                        transaction data
+
+  Each change listener is a map with the following options:
+  :table         name of the table to listen to, must include
+                 schema (eg. \"public.user\")
+  :values        map of {column value} for filtering which changes
+                 are relevant
+  :type          fn determining if the tx type should be included
+                 defaults to #{:UPDATE :INSERT :DELETE} (all types)
+  :update        function to process the change, receives the current
+                 values and tx event as parameter and must return
+                 the new collection values
+
+  See [[default-change-handler]] for a simple change handler that
+  is suitable if there are no joins in the query.
+
+  "
+  [{:keys [logical-replication initial-state changes]
+    :or {logical-replication logical-replication-instance}}]
+  (assert logical-replication
+          "Logical replication instance not specified and no global instance started.")
+  (let [state (atom (when-not (future? initial-state)
+                      initial-state))
+        unlistens (atom nil)
+
+        [source listeners]
+        (source/source-with-listeners
+         #(deref state)
+         #(let [unlistens @unlistens]
+            (log/debug "Cleaning up PostgreSQL collection-source with "
+                       (count unlistens) " listeners.")
+            (doseq [ul unlistens]
+              (ul))))
+
+        set-state! (fn [new-value]
+                     (reset! state new-value)
+                     (doseq [listener @listeners]
+                       (listener new-value)))]
+
+    ;; Register all logical replication table listeners
+    (reset!
+     unlistens
+     (mapv
+      (fn [{:keys [table values update type]
+            :or {type #{:UPDATE :INSERT :DELETE}}}]
+        (let [cb #(do
+                    (println "got event " (pr-str %))
+                    (when (type (:type %))
+                       (println ":type " (:type %) "matches, doing update")
+                       (set-state! (update @state %))))]
+          (if (seq values)
+            (listen-table-with-values! logical-replication table values cb)
+            (listen-table! logical-replication table cb))))
+      changes))
+    (when (future? initial-state)
+      (future (set-state! @initial-state)))
+
+    source))
+
+(defn default-change-handler
+  "Default change handler that updates collection values
+  based on values received. Inserted rows are inserted
+  at the position determined by `:compare` function
+  or at the end if not specified.
+
+  :id-keys   specifies set of keys (eg. #{:id}) used to determine
+             if two items represent the same row
+  "
+  [{:keys [table values id-keys keyword-keys? compare]}]
+  {:table table
+   :values values
+   :type #{:UPDATE :INSERT :DELETE}
+   :update (fn [current-values tx-event]
+             (let [values (into {}
+                                (map
+                                 (if keyword-keys?
+                                   (fn [[key val]] [(keyword key) val])
+                                   identity))
+                                (:values tx-event))
+                   changed-row-id (select-keys values id-keys)]
+               (case (:type tx-event)
+                 :UPDATE (mapv (fn [row]
+                                 (if (= changed-row-id (select-keys row id-keys))
+                                   (merge row values)
+                                   row))
+                               current-values)
+                 :INSERT (let [new-values (conj current-values values)]
+                           (if compare
+                             (sort compare new-values)
+                             new-values))
+                 :DELETE (filterv #(not= changed-row-id (select-keys % id-keys))
+                                  current-values))))})
