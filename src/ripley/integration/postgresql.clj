@@ -126,7 +126,7 @@ where the row has the specified email address.
   :replication-slot-options
                map of options for logical replication slot
   :replication-status-interval
-               status interval in seconds (default: 10)
+               status interval in seconds (default: 5)
   :replication-start-position
                optional start position of replication
                (org.postgresql.replication.LogSequenceNumber)
@@ -136,7 +136,7 @@ where the row has the specified email address.
            replication-slot-options
            replication-status-interval
            replication-start-position]
-    :or {replication-status-interval 10}}]
+    :or {replication-status-interval 5}}]
   (let [^PGReplicationStream stream
         (-> ^Connection connection
             ^PGConnection (.unwrap PGConnection)
