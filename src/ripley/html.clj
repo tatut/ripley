@@ -240,7 +240,15 @@
                      (when id
                        {:id id})
                      (when (seq class-names)
-                       {:class (str/join " " class-names)}))]
+                       {:class (if-let [class (:class props)]
+                                 ;; Has a class prop and hiccup classes in keyword
+                                 ;; combine them
+                                 `(str ~(str/join " " class-names)
+                                       " "
+                                       ~class)
+
+                                 ;; No class prop
+                                 (str/join " " class-names))}))]
     `(let [~live-id
            ;; FIXME: do the consume-component-id! only on the FIRST html element
            ;; during this ripley.html/html expansion call to optimize further
