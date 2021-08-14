@@ -1,17 +1,25 @@
 (ns ripley.js
   "JavaScript helpers")
 
-(defrecord JSCallback [callback-fn condition js-params])
+(defrecord JSCallback [callback-fn condition js-params debounce-ms])
 
 (defn js
   "Create a JavaScript callback that evaluates JS in browser to get parameters"
   [callback-fn & js-params]
-  (->JSCallback callback-fn nil js-params))
+  (->JSCallback callback-fn nil js-params nil))
 
 (defn js-when
   "Create a conditionally fired JS callback."
   [js-condition callback-fn & js-params]
-  (->JSCallback callback-fn js-condition js-params))
+  (->JSCallback callback-fn js-condition js-params nil))
+
+
+(defn js-debounced
+  "Create callback that sends value only when parameters settle (aren't
+  changed within given ms). This is useful for input values to prevent
+  sending on each keystroke, only when user stops typing."
+  [debounce-ms callback-fn & js-params]
+  (->JSCallback callback-fn nil js-params debounce-ms))
 
 (defn keycode-pressed?
   "Return JS code for checking if keypress event has given keycode"

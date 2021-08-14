@@ -4,26 +4,41 @@ window.ripley = {
     preOpenQueue: [],
     type: __TYPE__,
     connected: false,
+    debounceTimeout: {},
     get: function(id) {
         return document.querySelector("[data-rl='"+id+"']");
     },
-    send: function(id, args) {
+    send: function(id, args, debouncems) {
         if(this.debug) console.log("Sending id:", id, ", args: ", args);
         if(!this.connected) {
             this.preOpenQueue.push({id: id, args: args});
         } else {
-            if(this.type === "sse") {
-                var l = window.location;
-                fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
-                      {method: "POST",
-                       headers: {"Content-Type":"application/json"},
-                       body: JSON.stringify([id].concat(args))})
-            } else if(this.type === "ws") {
-                let msg = id+":"+JSON.stringify(args);
-                this.connection.send(msg);
+            if(debouncems === undefined) {
+                this._send(id,args);
             } else {
-                console.err("Unknown connection type: ", this.type);
+                var tid = this.debounceTimeout[id];
+                if(tid !== undefined) {
+                    window.clearTimeout(tid);
+                }
+                this.debounceTimeout[id] = window.setTimeout(
+                    function() { ripley._send(id,args); },
+                    debouncems
+                );
             }
+        }
+    },
+    _send: function(id,args) {
+        if(this.type === "sse") {
+            var l = window.location;
+            fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
+                  {method: "POST",
+                   headers: {"Content-Type":"application/json"},
+                   body: JSON.stringify([id].concat(args))})
+        } else if(this.type === "ws") {
+            let msg = id+":"+JSON.stringify(args);
+            this.connection.send(msg);
+        } else {
+            console.err("Unknown connection type: ", this.type);
         }
     },
     onopen: function(e) {
@@ -103,3 +118,5 @@ window.ripley = {
         }
     }
 }
+
+_rs = ripley.send.bind(ripley)

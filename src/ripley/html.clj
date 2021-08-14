@@ -107,10 +107,13 @@
 
     ;; A callback record
     (instance? ripley.js.JSCallback callback)
-    (let [invoke-callback-js (str "ripley.send("
+    (let [invoke-callback-js (str "_rs("
                                   (p/register-callback! dynamic/*live-context*
                                                         (:callback-fn callback))
-                                  ",[" (str/join "," (:js-params callback)) "])")
+                                  ",[" (str/join "," (:js-params callback)) "]"
+                                  (when-let [debounce-ms (:debounce-ms callback)]
+                                    (str "," debounce-ms))
+                                  ")")
           condition (:condition callback)]
       (if condition
         (str "if(" condition ") " invoke-callback-js)
@@ -118,7 +121,7 @@
 
     ;; A raw function, register it as callback
     (fn? callback)
-    (str "ripley.send(" (p/register-callback! dynamic/*live-context* callback) ", [])")
+    (str "_rs(" (p/register-callback! dynamic/*live-context* callback) ", [])")
 
     ;; Some js expression, return as is
     (string? callback)
