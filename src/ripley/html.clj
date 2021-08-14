@@ -410,7 +410,7 @@
     `(dyn! ~body)
 
     ;; Function call (or some other clojure form), pass it as is
-    (list? body)
+    (seq? body)
     body
 
     :else
