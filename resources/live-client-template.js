@@ -72,9 +72,11 @@ window.ripley = {
     },
     setAttr: function(elt, attr, value) {
         // set attributes, some are set as properties instead
-        switch(attr) {
-        case "checked": elt.checked = value!==null; break;
-        default:
+        if(attr === "checked") {
+            elt.checked = value!==null;
+        } else if(elt.tagName === "INPUT" && attr === "value") {
+            elt.value = value;
+        } else {
             if(value === null) {
                 elt.removeAttribute(attr);
             } else {
