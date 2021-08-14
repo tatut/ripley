@@ -51,3 +51,6 @@
   (str "document.getElementById('" (if (keyword? id)
                                      (name id)
                                      id) "').value"))
+
+(def prevent-default
+  "window.event.preventDefault()")
