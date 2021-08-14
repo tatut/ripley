@@ -5,6 +5,22 @@
             [ripley.impl.dynamic :as dyn]
             [clojure.string :as str]))
 
+(defn- encode [x]
+  (java.net.URLEncoder/encode (str x)))
+
+(defn- decode [x]
+  (java.net.URLDecoder/decode x))
+
+(defn- ->js
+  "Encode value suitably for js string."
+  [val]
+  (encode (pr-str val)))
+
+(defn- ->clj
+  "Read value to Clojure data"
+  [str]
+  (binding [*read-eval* false]
+    (read-string (decode str))))
 
 (defn- push-state-query-js [push-state-fn val]
   (let [query (str/join "&"
@@ -14,7 +30,7 @@
                                  (str k))
                                "="
                                (java.net.URLEncoder/encode (str v)))))]
-    (str push-state-fn "(\"" (pr-str val) "\", \"" query "\")")))
+    (str push-state-fn "(\"" (->js val) "\", \"" query "\")")))
 
 (defn push-state-query
   "Outputs a script that sets query parameters based on source value (a map).
@@ -33,12 +49,11 @@
         callback-id (p/register-callback!
                      ctx
                      (fn [arg]
-                       (let [val (binding [*read-eval* false]
-                                   (read-string arg))]
+                       (let [val (->clj arg)]
                          (reset! last-popped val)
                          (on-pop-state val))))]
     (h/out! "<script data-rl=\"" component-id "\">\n"
-            "history.replaceState({s:\"" (pr-str (p/current-value query-params-source)) "\"},document.title)\n"
+            "history.replaceState({s:\"" (->js (p/current-value query-params-source)) "\"},document.title)\n"
             "function " push-state-fn "(state,query) {\n"
             "var l = window.location; "
             "window.history.pushState({s:state},\"\","
