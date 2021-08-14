@@ -93,6 +93,7 @@
 (define-patch-method eval-js
   "Eval js with 'this' bound to the live component element"
   {:type "E"
+   :render-mode :json
    :js-eval "(new Function(payload)).call(elt);"})
 
 (def live-client-script
