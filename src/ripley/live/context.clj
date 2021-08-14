@@ -30,8 +30,9 @@
   "Callback for source changes that send updates to component."
   [{:keys [state send-fn!] :as ctx}
    id
-   {:keys [source component patch parent did-update]
-    :or {patch :replace}}
+   {:keys [source component patch parent did-update should-update?]
+    :or {patch :replace
+         should-update? (constantly true)}}
    val]
 
   (log/trace "component " id " has " val)
@@ -47,7 +48,8 @@
                   [(patch/delete id)]))
       (p/close! source))
 
-    (when (some? val) ;; PENDING: allow nil as value now that we are not using channels
+    (when (and (some? val) ;; PENDING: allow nil as value now that we are not using channels
+               (should-update? val))
       (let [target-id (if (patch/target-parent? patch)
                         parent
                         id)
@@ -103,7 +105,7 @@
                         this id
                         (merge
                          {:source source :component component}
-                         (select-keys opts [:patch :parent :did-update]))))]
+                         (select-keys opts [:patch :parent :did-update :should-update?]))))]
           (swap! state assoc-in [:components id :unlisten] unlisten)))
       id))
 
