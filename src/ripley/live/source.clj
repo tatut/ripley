@@ -165,6 +165,12 @@
          (->SplitSource parent-source unlisten keyset listeners)))
      keysets)))
 
+(defn split-key
+  "Like [[split]] but returns source that takes a single key from parent source."
+  [parent-source key]
+  (c= (get %parent-source key)))
+
+
 (defrecord SourceWithListeners [listeners current-value-fn cleanup-fn]
   p/Source
   (current-value [_]
