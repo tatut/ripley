@@ -226,7 +226,7 @@
           ;; Regular attribute, output with value
           `(when ~(if static-value true `(some? ~val))
              (out! ~(str " " (name attr) "=\"")
-                   ~@(when static-value [static-value]))
+                   ~@(when static-value [(str static-value " ")]))
              (dyn! ~val)
              (out! "\"")))
        (binding [dynamic/*component-id* ~component-live-id]
