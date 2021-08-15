@@ -147,11 +147,22 @@
            (catch Throwable t
              (println "No garden dependency, can't compile styles")))))
 
+(defn to-style-str [style]
+  (cond
+    (string? style)
+    style
+
+    (map? style)
+    (@garden-compile-style [style])))
+
 (defn- compile-style [style]
   (cond
     ;; String style attr, pass it through as is
     (string? style)
     `(out! " style=\"" ~style "\"")
+
+    (symbol? style)
+    `(out! " style=\"" (to-style-str ~style) "\"")
 
     ;; Render maps with garden, if present
     (map? style)
@@ -193,7 +204,7 @@
   "Attributes that are rendered without value"
   #{:checked :selected :disabled :readonly :multiple})
 
-(defn- register-live-attr [component-live-id attr live]
+(defn- register-live-attr [component-live-id attr live static-value]
   (let [{:keys [source component did-update]} (live-source-and-component live)
         val (gensym "val")
         new-val (if component
@@ -213,8 +224,9 @@
           `(when ~val
              (out! ~(str " " (name attr))))
           ;; Regular attribute, output with value
-          `(when (some? ~val)
-             (out! ~(str " " (name attr) "=\""))
+          `(when ~(if static-value true `(some? ~val))
+             (out! ~(str " " (name attr) "=\"")
+                   ~@(when static-value [static-value]))
              (dyn! ~val)
              (out! "\"")))
        (binding [dynamic/*component-id* ~component-live-id]
@@ -236,14 +248,15 @@
         element (element-name element-kw)
         class-names (element-class-names element-kw)
         id (element-id element-kw)
-        [props children] (props-and-children body)
-        live-attrs (live-attributes props)
+        [orig-props children] (props-and-children body)
+        live-attrs (live-attributes orig-props)
         live-id (gensym "live-id")
-        props (merge props
+        props (merge orig-props
                      (when id
                        {:id id})
                      (when (seq class-names)
-                       {:class (if-let [class (:class props)]
+                       {:class (if-let [class (and (not (live-attrs :class))
+                                                   (:class orig-props))]
                                  ;; Has a class prop and hiccup classes in keyword
                                  ;; combine them
                                  `(str ~(str/join " " class-names)
@@ -251,7 +264,12 @@
                                        ~class)
 
                                  ;; No class prop
-                                 (str/join " " class-names))}))]
+                                 (str/join " " class-names))})
+                     (when (and (seq class-names)
+                                (live-attrs :class))
+                       ;; Both static classes and a live class attribute
+                       ;; we need to record the static ones for js side
+                       {:data-rl-class (str/join " " class-names)}))]
     `(let [~live-id
            ;; FIXME: do the consume-component-id! only on the FIRST html element
            ;; during this ripley.html/html expansion call to optimize further
@@ -267,7 +285,12 @@
                :let [html-attr (html-attr-name attr)]]
            (if (live-attrs attr)
              ;; Live attribute, register source
-             (register-live-attr live-id attr val)
+             (register-live-attr live-id attr (orig-props attr)
+                                 ;; Class is special as it may be in hiccup
+                                 ;; keyword as static value AND have a live
+                                 ;; attribute that defines more classes
+                                 (and (= attr :class)
+                                      (:data-rl-class props)))
 
              ;; Style or other regular attribute
              (if (= :style attr)

@@ -76,6 +76,9 @@ window.ripley = {
             elt.checked = value!==null;
         } else if(elt.tagName === "INPUT" && attr === "value") {
             elt.value = value;
+        } else if(attr === "class" && elt.hasAttribute("data-rl-class")) {
+            // has static class + dynamic part
+            elt.className = elt.getAttribute("data-rl-class") + " " + value;
         } else {
             if(value === null) {
                 elt.removeAttribute(attr);
