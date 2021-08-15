@@ -552,10 +552,15 @@
 (defn render-response
   "Return a ring reponse that renders HTML.
   The function is called with HTML output bound."
-  [render-fn]
-  {:status 200
-   :headers {"Content-Type" "text/html"}
-   :body (context/render-with-context render-fn)})
+  ([render-fn] (render-response {} render-fn))
+  ([response-map render-fn]
+   (assert (not (contains? response-map :body))
+           "Response map can't contain body. Render gives body.")
+   (merge
+    {:status 200
+     :headers {"Content-Type" "text/html"}
+     :body (context/render-with-context render-fn)}
+    response-map)))
 
 (defn live-client-script
   ([path]
