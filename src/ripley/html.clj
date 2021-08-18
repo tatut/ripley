@@ -556,7 +556,9 @@
   ([response-map render-fn]
    (assert (not (contains? response-map :body))
            "Response map can't contain body. Render gives body.")
-   (merge
+   (merge-with
+    (fn [a b]
+      (if (map? a) (merge a b) b))
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body (context/render-with-context render-fn)}
