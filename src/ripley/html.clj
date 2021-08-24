@@ -392,12 +392,13 @@
                             ~(if patch
                                {:patch patch}
                                {}))]
-       (if-let [val# (p/current-value source#)]
-         (dynamic/with-component-id id#
-           (component# val#))
+       (let [val# (p/current-value source#)]
+         (if (some? val#)
+           (dynamic/with-component-id id#
+             (component# val#))
 
-         ;; Render placeholder now that will be replaced with contents
-         (out! ~(str "<span data-rl=\"") id# "\" />")))))
+           ;; Render placeholder now that will be replaced with contents
+           (out! ~(str "<span data-rl=\"") id# "\" />"))))))
 
 (def compile-special {:<> #'compile-fragment
                       ::let #'compile-let
