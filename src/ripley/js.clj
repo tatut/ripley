@@ -3,6 +3,7 @@
 
 (defrecord JSCallback [callback-fn condition js-params debounce-ms])
 
+
 (defn js
   "Create a JavaScript callback that evaluates JS in browser to get parameters"
   [callback-fn & js-params]
@@ -54,3 +55,13 @@
 
 (def prevent-default
   "window.event.preventDefault()")
+
+(defn form-values
+  "Extract form values as a map of key/value."
+  [form-selector]
+  (str "(()=>{"
+       "let d = {};"
+       "for(const e of new FormData(document.querySelector('" form-selector "')).entries())"
+       "d[e[0]]=e[1];"
+       "return d;"
+       "})()"))
