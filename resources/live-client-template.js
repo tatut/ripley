@@ -121,6 +121,10 @@ window.ripley = {
             // Simple outerHTML change for HTML elements
             elt.outerHTML = withContent;
         }
+        // evaluate any scripts in the content
+        elt.querySelector("script").forEach( (script) => {
+            eval(script.text)
+        })
     }
 }
 
