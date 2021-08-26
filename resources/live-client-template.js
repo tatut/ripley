@@ -121,10 +121,14 @@ window.ripley = {
             // Simple outerHTML change for HTML elements
             elt.outerHTML = withContent;
         }
-        // evaluate any scripts in the content
-        elt.querySelectorAll("script").forEach( (script) => {
-            eval(script.text+"")
-        })
+        // if there were any scripts in the replaced content, evaluate them
+        // we need to refetch the element from DOM after its outerHTML changd
+        if(withContent.match(/<script/ig)) {
+            let id = elt.getAttribute("data-rl");
+            ripley.get(id).querySelectorAll("script").forEach( (script) => {
+                eval(script.text+"")
+            })
+        }
     }
 }
 
