@@ -122,7 +122,7 @@ window.ripley = {
             elt.outerHTML = withContent;
         }
         // evaluate any scripts in the content
-        elt.querySelector("script").forEach( (script) => {
+        elt.querySelectorAll("script").forEach( (script) => {
             eval(script.text)
         })
     }
