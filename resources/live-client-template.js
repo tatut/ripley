@@ -123,7 +123,7 @@ window.ripley = {
         }
         // evaluate any scripts in the content
         elt.querySelectorAll("script").forEach( (script) => {
-            eval(script.text)
+            eval(script.text+"")
         })
     }
 }
