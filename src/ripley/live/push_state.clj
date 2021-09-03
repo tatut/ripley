@@ -72,7 +72,5 @@
             "window.addEventListener(\"popstate\", (s) =>  ripley.send(" callback-id ",[s.state.s]))\n"
             "</script>\n")))
 
-;;
+;; Allow call with old name
 (def push-state-query push-state)
-
-(defn push-state-path )
