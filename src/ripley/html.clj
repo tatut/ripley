@@ -14,6 +14,8 @@
 
 (set! *warn-on-reflection* true)
 
+(def ^:dynamic *raw-text-content* false)
+
 (defn out! [& things]
   (doseq [thing things]
     (.write ^java.io.Writer *html-out* (str thing))))
@@ -50,7 +52,8 @@
     [props children]))
 
 (defn compile-children [children]
-  (map compile-html children))
+  (doall
+   (map compile-html children)))
 
 (def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
                            "onkeypress" "onkeyup" "onkeydown"
@@ -241,6 +244,8 @@
 
 (def no-close-tag #{"input"})
 
+(def raw-text-content #{"script"})
+
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
   [body]
@@ -314,7 +319,8 @@
        ~@(if (no-close-tag element)
            [`(out! ">")]
            (concat [`(out! ">")]
-                   (compile-children children)
+                   (binding [*raw-text-content* (raw-text-content element)]
+                     (compile-children children))
                    [`(out! ~(str "</" element ">"))])))))
 
 (defn compile-fragment [body]
@@ -427,7 +433,9 @@
 
     (string? body)
     ;; Static content
-    `(out! ~(StringEscapeUtils/escapeHtml4 body))
+    (if *raw-text-content*
+      `(out! ~body)
+      `(out! ~(StringEscapeUtils/escapeHtml4 body)))
 
     ;; Some dynamic content: symbol reference
     (symbol? body)
