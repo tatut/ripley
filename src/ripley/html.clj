@@ -55,9 +55,13 @@
   (doall
    (map compile-html children)))
 
-(def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
+#_(def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
                            "onkeypress" "onkeyup" "onkeydown"
-                           "ondblclick"})
+                             "ondblclick"})
+(defn- callback-attribute? [attr-name]
+  (and (string? attr-name)
+       (str/starts-with? attr-name "on")))
+
 
 (def no-mangle-attributes
   "Attribute names that should not be mangled (like SVG attrs having dashes)"
@@ -312,7 +316,7 @@
                  (let [valsym (gensym "val")]
                    `(when-let [~valsym ~val]
                       (out! " " ~html-attr "=\""
-                            ~(if (callback-attributes html-attr)
+                            ~(if (callback-attribute? html-attr)
                                `(register-callback ~valsym)
                                `(str ~valsym))
                             "\"")))))))
