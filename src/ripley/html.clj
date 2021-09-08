@@ -96,7 +96,7 @@
 
 (defn no-mangle-attribute? [attr]
   (or (contains? no-mangle-attributes attr)
-      (str/starts-with? name "data-")
+      (str/starts-with? attr "data-")
       (str/starts-with? attr "aria-")))
 
 (defn- html-attr-name [attr-name]
