@@ -94,11 +94,15 @@
     "vert-adv-y" "vert-origin-x" "vert-origin-y"
     "word-spacing" "writing-mode" "x-height"})
 
+(defn no-mangle-attribute? [attr]
+  (or (contains? no-mangle-attributes attr)
+      (str/starts-with? name "data-")
+      (str/starts-with? attr "aria-")))
+
 (defn- html-attr-name [attr-name]
   (let [name (name attr-name)]
-    (if (or (str/starts-with? name "data-")
-            (no-mangle-attributes name))
-      ;; Keep data attribute names and names marked no mangle as is
+    (if (no-mangle-attribute? name)
+      ;; Keep attributes marked no mangle as is
       name
 
       ;; otherwise lowercase and remove dashes
