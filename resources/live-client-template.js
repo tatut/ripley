@@ -117,6 +117,13 @@ window.ripley = {
         // other solution is to reload page (should do only if reconnect
         // fails because server has discarded the live context)
         console.log("WebSocket connection closed", evt);
+
+        // If application has rendered an element with id "ripley-disconnected"
+        // then set its display to block
+        let disconnected = document.querySelector("#ripley-disconnected");
+        if(disconnected != null) {
+            disconnected.style.display="block";
+        }
     },
 
     // helper for R patch method to work around SVG issues
