@@ -118,11 +118,11 @@ window.ripley = {
         // fails because server has discarded the live context)
         console.log("WebSocket connection closed", evt);
 
-        // If application has rendered an element with id "ripley-disconnected"
-        // then set its display to block
-        let disconnected = document.querySelector("#ripley-disconnected");
-        if(disconnected != null) {
-            disconnected.style.display="block";
+        // If application has added an global function with name "ripley_disconnected"
+        // then call that.
+        let disconnected = window.ripley_disconnected;
+        if(typeof(disconnected) === "function") {
+            disconnected();
         }
     },
 
