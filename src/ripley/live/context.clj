@@ -10,7 +10,8 @@
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
             [ripley.impl.dynamic :as dynamic]
-            [taoensso.timbre :as log]))
+            [taoensso.timbre :as log])
+  (:import (java.util.concurrent Executors TimeUnit ScheduledExecutorService Future)))
 
 (set! *warn-on-reflection* true)
 
@@ -140,7 +141,9 @@
 (defonce current-live-contexts (atom {}))
 
 (defn- cleanup-ctx [ctx]
-  (let [{:keys [context-id components cleanup]} @(:state ctx)]
+  (let [{:keys [context-id components cleanup ping-task]} @(:state ctx)]
+    (when ping-task
+      (.cancel ^Future ping-task false))
     (swap! current-live-contexts dissoc context-id)
     (doseq [{source :source} (vals components)
             :when source]
@@ -166,6 +169,16 @@
        data
        (str "data: " data "\n\n"))
      false)))
+
+(defonce ping-executor
+  (delay (Executors/newScheduledThreadPool 0)))
+
+(defn- schedule-ping [ch ping-interval]
+  (.scheduleWithFixedDelay
+   ^ScheduledExecutorService @ping-executor
+   #(server/send! ch "!")
+   ping-interval ping-interval
+   TimeUnit/SECONDS))
 
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
@@ -213,7 +226,16 @@
       {:status 404
        :body "Unknown callback"})))
 
-(defn connection-handler [uri]
+(defn connection-handler
+  "Handler that initiates WebSocket (or SSE) connection with ripley server
+  and browser.
+
+  Options:
+
+  :ping-interval  Ping interval seconds. If specified, send ping message to client periodically.
+                  This can facilitate keeping alive connections when load balancers have some
+                  idle timeout. "
+  [uri & {:keys [ping-interval]}]
   (params/wrap-params
    (fn [req]
      (when (= uri (:uri req))
@@ -232,18 +254,20 @@
                  (cleanup-ctx ctx))
                :on-receive
                (fn [_ch ^String data]
-                 (let [idx (.indexOf data ":")
-                       id (Long/parseLong (if (pos? idx)
-                                            (subs data 0 idx)
-                                            data))
-                       args (if (pos? idx)
-                              (seq (cheshire/decode (subs data (inc idx)) keyword))
-                              nil)
-                       callback (-> ctx :state deref :callbacks (get id))]
-                   (if-not callback
-                     (println "Got callback with unrecognized id: " id)
-                     (dynamic/with-live-context ctx
-                       (apply callback args)))))
+                 (if (= data "!")
+                   (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
+                   (let [idx (.indexOf data ":")
+                         id (Long/parseLong (if (pos? idx)
+                                              (subs data 0 idx)
+                                              data))
+                         args (if (pos? idx)
+                                (seq (cheshire/decode (subs data (inc idx)) keyword))
+                                nil)
+                         callback (-> ctx :state deref :callbacks (get id))]
+                     (if-not callback
+                       (println "Got callback with unrecognized id: " id)
+                       (dynamic/with-live-context ctx
+                         (apply callback args))))))
                :on-open
                (fn [ch]
                  (log/debug "Connected, ws? " (server/websocket? ch))
@@ -259,4 +283,6 @@
                  (async/close! (:wait-ch @(:state ctx)))
                  (swap! (:state ctx) assoc
                         :channel ch
+                        :ping-task (when ping-interval
+                                     (schedule-ping ch ping-interval))
                         :status :connected))}))))))))

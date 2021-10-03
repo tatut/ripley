@@ -65,7 +65,8 @@ window.ripley = {
             var url = (l.protocol=="https:"?"wss://":"ws://")+l.host+path+"?id="+id;
             this.connection = new WebSocket(url);
             this.connection.onmessage = this.onmessage.bind(this);
-            this.connection.onopen = this.onopen.bind(this)
+            this.connection.onopen = this.onopen.bind(this);
+            this.connection.onclose = this.onclose.bind(this);
         } else {
             console.error("Unknown connection type: ", this.type);
         }
@@ -89,21 +90,39 @@ window.ripley = {
     },
     onmessage: function(msg) {
         if(this.debug) console.log("Received:", msg);
-        var patches = JSON.parse(msg.data);
-        var patchlen = patches.length;
-        for(var p = 0; p < patchlen; p++) {
-            var patch = patches[p];
-            var id = patch[0];
-            var elt = ripley.get(id);
-            if(elt == null) {
-                console.error("Received content for non-existant element: ", id,
-                              "msg:", msg);
-            } else {
-                var method = patch[1];
-                var payload = patch[2];
-                if(this.debug) console.log("elt: ", elt, "method: ", method, ", payload: ", payload);
-                __PATCH__
+        if(msg.data === "!") {
+            // Appliation level PING
+            this.connection.send("!");
+        } else {
+            var patches = JSON.parse(msg.data);
+            var patchlen = patches.length;
+            for(var p = 0; p < patchlen; p++) {
+                var patch = patches[p];
+                var id = patch[0];
+                var elt = ripley.get(id);
+                if(elt == null) {
+                    console.error("Received content for non-existant element: ", id,
+                                  "msg:", msg);
+                } else {
+                    var method = patch[1];
+                    var payload = patch[2];
+                    if(this.debug) console.log("elt: ", elt, "method: ", method, ", payload: ", payload);
+                    __PATCH__
+                }
             }
+        }
+    },
+    onclose: function(evt) {
+        // PENDING: reconnect needs server to not cleanup the connection
+        // other solution is to reload page (should do only if reconnect
+        // fails because server has discarded the live context)
+        console.log("WebSocket connection closed", evt);
+
+        // If application has added an global function with name "ripley_disconnected"
+        // then call that.
+        let disconnected = window.ripley_disconnected;
+        if(typeof(disconnected) === "function") {
+            disconnected();
         }
     },
 
@@ -120,6 +139,14 @@ window.ripley = {
         } else {
             // Simple outerHTML change for HTML elements
             elt.outerHTML = withContent;
+        }
+        // if there were any scripts in the replaced content, evaluate them
+        // we need to refetch the element from DOM after its outerHTML changd
+        if(withContent.match(/<script/ig)) {
+            let id = elt.getAttribute("data-rl");
+            ripley.get(id).querySelectorAll("script").forEach( (script) => {
+                eval(script.text+"")
+            })
         }
     }
 }

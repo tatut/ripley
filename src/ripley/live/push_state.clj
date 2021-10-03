@@ -22,26 +22,36 @@
   (binding [*read-eval* false]
     (read-string (decode str))))
 
-(defn- push-state-query-js [push-state-fn val]
-  (let [query (str/join "&"
-                        (for [[k v] val]
-                          (str (if (keyword? k)
-                                 (name k)
-                                 (str k))
-                               "="
-                               (java.net.URLEncoder/encode (str v)))))]
-    (str push-state-fn "(\"" (->js val) "\", \"" query "\")")))
+(defn- push-state-query-js [push-state-fn {path ::path :as val}]
+  (let [args (dissoc val ::path)
+        query-string (when (seq args)
+                       (str "?"
+                            (str/join
+                             "&"
+                             (for [[k v] args]
+                               (str (if (keyword? k)
+                                      (name k)
+                                      (str k))
+                                    "="
+                                    (java.net.URLEncoder/encode (str v)))))))
+        location (if path
+                   (str "\"" path query-string "\"")
+                   (str "location.pathname+\"" query-string "\""))]
+    (str push-state-fn "(\"" (->js val) "\"," location ")")))
 
-(defn push-state-query
-  "Outputs a script that sets query parameters based on source value (a map).
+(defn push-state
+  "Outputs a script that sets path and query parameters based on source value (a map).
   When browser pops state, the callback is invoked to handle new values.
   The callback will be invoked with the popped state.
+
+  The location path is included in the map with key :ripley.live.push-state/path
+  all other keys are considered to be query parameters.
   "
-  [query-params-source on-pop-state]
+  [path-and-params-source on-pop-state]
   (let [push-state-fn (str (gensym "_ps"))
         ctx dyn/*live-context*
         last-popped (atom nil)
-        component-id (p/register! ctx query-params-source
+        component-id (p/register! ctx path-and-params-source
                                   (partial push-state-query-js push-state-fn)
                                   {:patch :eval-js
                                    :should-update? (fn [val]
@@ -53,11 +63,14 @@
                          (reset! last-popped val)
                          (on-pop-state val))))]
     (h/out! "<script data-rl=\"" component-id "\">\n"
-            "history.replaceState({s:\"" (->js (p/current-value query-params-source)) "\"},document.title)\n"
-            "function " push-state-fn "(state,query) {\n"
+            "history.replaceState({s:\"" (->js (p/current-value path-and-params-source)) "\"},document.title)\n"
+            "function " push-state-fn "(state,location) {\n"
             "var l = window.location; "
             "window.history.pushState({s:state},\"\","
-            "l.protocol+\"//\"+l.host+l.pathname+\"?\"+query)\n"
+            "l.protocol+\"//\"+l.host+location)\n"
             "}\n"
             "window.addEventListener(\"popstate\", (s) =>  ripley.send(" callback-id ",[s.state.s]))\n"
             "</script>\n")))
+
+;; Allow call with old name
+(def push-state-query push-state)

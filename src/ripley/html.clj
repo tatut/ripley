@@ -14,6 +14,8 @@
 
 (set! *warn-on-reflection* true)
 
+(def ^:dynamic *raw-text-content* false)
+
 (defn out! [& things]
   (doseq [thing things]
     (.write ^java.io.Writer *html-out* (str thing))))
@@ -50,11 +52,16 @@
     [props children]))
 
 (defn compile-children [children]
-  (map compile-html children))
+  (doall
+   (map compile-html children)))
 
-(def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
+#_(def callback-attributes #{"onchange" "onclick" "onblur" "onfocus"
                            "onkeypress" "onkeyup" "onkeydown"
-                           "ondblclick"})
+                             "ondblclick"})
+(defn- callback-attribute? [attr-name]
+  (and (string? attr-name)
+       (str/starts-with? attr-name "on")))
+
 
 (def no-mangle-attributes
   "Attribute names that should not be mangled (like SVG attrs having dashes)"
@@ -87,11 +94,15 @@
     "vert-adv-y" "vert-origin-x" "vert-origin-y"
     "word-spacing" "writing-mode" "x-height"})
 
+(defn no-mangle-attribute? [attr]
+  (or (contains? no-mangle-attributes attr)
+      (str/starts-with? attr "data-")
+      (str/starts-with? attr "aria-")))
+
 (defn- html-attr-name [attr-name]
   (let [name (name attr-name)]
-    (if (or (str/starts-with? name "data-")
-            (no-mangle-attributes name))
-      ;; Keep data attribute names and names marked no mangle as is
+    (if (no-mangle-attribute? name)
+      ;; Keep attributes marked no mangle as is
       name
 
       ;; otherwise lowercase and remove dashes
@@ -202,7 +213,7 @@
 
 (def boolean-attribute?
   "Attributes that are rendered without value"
-  #{:checked :selected :disabled :readonly :multiple})
+  #{:checked :selected :disabled :readonly :multiple :defer})
 
 (defn- register-live-attr [component-live-id attr live static-value]
   (let [{:keys [source component did-update]} (live-source-and-component live)
@@ -240,6 +251,8 @@
                        :did-update ~did-update})))))
 
 (def no-close-tag #{"input"})
+
+(def raw-text-content #{"script"})
 
 (defn compile-html-element
   "Compile HTML markup element, like [:div.someclass \"content\"]."
@@ -307,14 +320,15 @@
                  (let [valsym (gensym "val")]
                    `(when-let [~valsym ~val]
                       (out! " " ~html-attr "=\""
-                            ~(if (callback-attributes html-attr)
+                            ~(if (callback-attribute? html-attr)
                                `(register-callback ~valsym)
                                `(str ~valsym))
                             "\"")))))))
        ~@(if (no-close-tag element)
            [`(out! ">")]
            (concat [`(out! ">")]
-                   (compile-children children)
+                   (binding [*raw-text-content* (raw-text-content element)]
+                     (compile-children children))
                    [`(out! ~(str "</" element ">"))])))))
 
 (defn compile-fragment [body]
@@ -392,12 +406,13 @@
                             ~(if patch
                                {:patch patch}
                                {}))]
-       (if-let [val# (p/current-value source#)]
-         (dynamic/with-component-id id#
-           (component# val#))
+       (let [val# (p/current-value source#)]
+         (if (some? val#)
+           (dynamic/with-component-id id#
+             (component# val#))
 
-         ;; Render placeholder now that will be replaced with contents
-         (out! ~(str "<script type=\"ripley/placeholder\" data-rl=\"") id# "\"></script>")))))
+           ;; Render placeholder now that will be replaced with contents
+           (out! ~(str "<script type=\"ripley/placeholder\" data-rl=\"") id# "\"></script>"))))))
 
 (def compile-special {:<> #'compile-fragment
                       ::let #'compile-let
@@ -426,7 +441,9 @@
 
     (string? body)
     ;; Static content
-    `(out! ~(StringEscapeUtils/escapeHtml4 body))
+    (if *raw-text-content*
+      `(out! ~body)
+      `(out! ~(StringEscapeUtils/escapeHtml4 body)))
 
     ;; Some dynamic content: symbol reference
     (symbol? body)
