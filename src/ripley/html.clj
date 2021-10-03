@@ -397,7 +397,7 @@
            (component# val#))
 
          ;; Render placeholder now that will be replaced with contents
-         (out! ~(str "<span data-rl=\"") id# "\" />")))))
+         (out! ~(str "<script type=\"ripley/placeholder\" data-rl=\"") id# "\"></script>")))))
 
 (def compile-special {:<> #'compile-fragment
                       ::let #'compile-let
