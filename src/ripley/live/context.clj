@@ -180,13 +180,21 @@
    ping-interval ping-interval
    TimeUnit/SECONDS))
 
+(defn- queued-send-fn [state-atom send-fn!]
+  (fn [ch data]
+    (if (nil? ch)
+      ;; No connection yet, queue this send
+      (swap! state-atom update :send-queue (fnil conj []) data)
+      (send-fn! ch data))))
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
   (let [wait-ch (async/chan)
         {id :context-id :as initial-state} (initial-context-state wait-ch)
         state (atom initial-state)
-        ctx (->DefaultLiveContext default-send-fn! state)]
+        ctx (->DefaultLiveContext
+             (queued-send-fn state default-send-fn!) state)]
     (swap! current-live-contexts assoc id ctx)
     (ring-io/piped-input-stream
      (fn [out]
@@ -277,12 +285,19 @@
                                      :headers {"Content-Type" "text/event-stream"}}
                                  false))
 
+                 ;; Send any items in the send queue
+                 (doseq [queued-data (:send-queue @(:state ctx))]
+                   (default-send-fn! ch queued-data))
+
                  ;; Close the wait-ch so the registered live component
                  ;; go-blocks will start running
                  ;; TODO: We shouldn't need this anymore
                  (async/close! (:wait-ch @(:state ctx)))
-                 (swap! (:state ctx) assoc
-                        :channel ch
-                        :ping-task (when ping-interval
-                                     (schedule-ping ch ping-interval))
-                        :status :connected))}))))))))
+                 (swap! (:state ctx)
+                        #(-> %
+                             (dissoc :send-queue :wait-ch)
+                             (assoc
+                              :channel ch
+                              :ping-task (when ping-interval
+                                           (schedule-ping ch ping-interval))
+                              :status :connected))))}))))))))
