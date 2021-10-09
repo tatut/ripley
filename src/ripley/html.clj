@@ -6,7 +6,6 @@
             [ripley.live.protocols :as p]
             [ripley.live.source :as source]
             [clojure.core.async :as async]
-            ripley.js
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
             [ripley.impl.dynamic :as dynamic])
@@ -117,15 +116,15 @@
     (str/join ";" (map register-callback callback))
 
     ;; A callback record
-    (instance? ripley.js.JSCallback callback)
+    (satisfies? p/Callback callback)
     (let [invoke-callback-js (str "_rs("
                                   (p/register-callback! dynamic/*live-context*
-                                                        (:callback-fn callback))
-                                  ",[" (str/join "," (:js-params callback)) "]"
-                                  (when-let [debounce-ms (:debounce-ms callback)]
+                                                        (p/callback-fn callback))
+                                  ",[" (str/join "," (p/callback-js-params callback)) "]"
+                                  (when-let [debounce-ms (p/callback-debounce-ms callback)]
                                     (str "," debounce-ms))
                                   ")")
-          condition (:condition callback)]
+          condition (p/callback-condition callback)]
       (if condition
         (str "if(" condition ") " invoke-callback-js)
         invoke-callback-js))

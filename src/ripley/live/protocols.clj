@@ -40,3 +40,9 @@ Returns 0-arity function that will remove the listener when called.")
 ;; behaviour (like atoms)
 (defprotocol Writable
   (write! [this new-value] "Write new value for this source."))
+
+(defprotocol Callback
+  (callback-js-params [this] "Return collection JS code fragments to get parameters")
+  (callback-debounce-ms [this] "Return milliseconds how much this callback invocation should be debounced for, or nil if not debounced.")
+  (callback-fn [this] "Return the actual callback function to invoke.")
+  (callback-condition [this] "Return JS condition code for conditional callback invocation ornil"))

@@ -1,7 +1,15 @@
 (ns ripley.js
-  "JavaScript helpers")
+  "JavaScript helpers"
+  (:require [ripley.live.protocols :as p]
+            [ripley.impl.dynamic :as dyn]
+            [ripley.html :as h]))
 
-(defrecord JSCallback [callback-fn condition js-params debounce-ms])
+(defrecord JSCallback [callback-fn condition js-params debounce-ms]
+  p/Callback
+  (callback-js-params [_] js-params)
+  (callback-fn [_] callback-fn)
+  (callback-debounce-ms [_] debounce-ms)
+  (callback-condition [_] condition))
 
 
 (defn js
@@ -65,3 +73,13 @@
        "d[e[0]]=e[1];"
        "return d;"
        "})()"))
+
+(defn eval-js-from-source
+  "Output a script element that evaluates JS code from source.
+  Evaluates JS whenever source changes. The source values must be valid
+  scripts."
+  [source]
+  (let [id (p/register! dyn/*live-context* source
+                        identity
+                        {:patch :eval-js})]
+    (h/html [:script {:data-rl id}])))
