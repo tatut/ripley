@@ -96,3 +96,4 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 | ---- | --- |
 | redis | Integrate Redis pubsub channels as sources (uses carmine library) |
 | manifold | Integrate manifold library `deferred` and `stream` as source |
+| xtdb | Integrate XTDB query as an automatically updating source |
