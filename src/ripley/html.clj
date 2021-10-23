@@ -396,22 +396,42 @@
 (defn compile-live
   "Compile special :ripley.html/live element."
   [live-element]
-  (let [{:keys [source component patch]} (live-source-and-component live-element)]
-    `(let [source# (source/source ~source)
-           component# ~(or component
+  (let [{:keys [source component patch container]}
+        (live-source-and-component live-element)
+        id-sym (gensym "id")
+        comp-sym (gensym "component")
+        source-sym (gensym "source")]
+    (assert (or (nil? container)
+                (and (vector? container)
+                     (or (= patch :append)
+                         (= patch :prepend))))
+            "Only :append or :prepend patch methods can have container, which must be a hiccup element vector.")
+    `(let [~source-sym (source/source ~source)
+           ~comp-sym ~(or component
                            `(fn [thing#]
                               (out! (str thing#))))
-           id# (p/register! dynamic/*live-context* source# component#
-                            ~(if patch
-                               {:patch patch}
-                               {}))]
-       (let [val# (p/current-value source#)]
-         (if (some? val#)
-           (dynamic/with-component-id id#
-             (component# val#))
+           ~id-sym (p/register! dynamic/*live-context* ~source-sym ~comp-sym
+                                ~(if patch
+                                   {:patch patch}
+                                   {}))]
+       ~(if container
+          ;; If there's a container element for append/prepend content
+          ;; render that, with any initial content that is available
+          `(dynamic/with-component-id ~id-sym
+             ~(compile-html-element
+               (conj container
+                     `(let [val# (p/current-value ~source-sym)]
+                        (when (some? val#)
+                          (~comp-sym val#))))))
+          `(let [val# (p/current-value ~source-sym)]
+             (if (some? val#)
+               (dynamic/with-component-id ~id-sym
+                 (~comp-sym val#))
 
-           ;; Render placeholder now that will be replaced with contents
-           (out! ~(str "<script type=\"ripley/placeholder\" data-rl=\"") id# "\"></script>"))))))
+               ;; Render placeholder now that will be replaced with contents
+               (out! ~(str "<script type=\"ripley/placeholder\" data-rl=\"")
+                     ~id-sym
+                     "\"></script>")))))))
 
 (def compile-special {:<> #'compile-fragment
                       ::let #'compile-let
