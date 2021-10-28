@@ -314,14 +314,15 @@
                           (number? val) (str val)
                           :else nil)]
                  ;; Expand a static attribute
-                 `(out! ~(str " " html-attr "=\"" static-value "\""))
+                 `(out! ~(str " " html-attr "=\""
+                              (StringEscapeUtils/escapeHtml4 static-value) "\""))
                  ;; Expand dynamic attribute (where nil removes the value)
                  (let [valsym (gensym "val")]
                    `(when-let [~valsym ~val]
                       (out! " " ~html-attr "=\""
                             ~(if (callback-attribute? html-attr)
                                `(register-callback ~valsym)
-                               `(str ~valsym))
+                               `(StringEscapeUtils/escapeHtml4 (str ~valsym)))
                             "\"")))))))
        ~@(if (no-close-tag element)
            [`(out! ">")]
