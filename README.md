@@ -43,7 +43,7 @@ function is called with the value received from the source.
   (h/html
     [:div
       "Counter value: " [::h/live {:source (atom-source counter)
-                                   :component #(h/out! (str %))}]
+                                   :component #(h/html [:span %])}]
       [:button {:on-click #(swap! counter inc)} "increment"]
       [:button {:on-click #(swap! counter dec)} "decrement"]]))
 ```
