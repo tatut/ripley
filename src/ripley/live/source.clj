@@ -230,19 +230,16 @@
 
 
 (defn future-source
-  "Source for future or promise."
-  [d]
-  (let [[source _]
-        (source-with-listeners
-         #(deref d 0 nil))]
-    ;; Wait for future to complete in another thread and send value
-    (future
-      (println "starting to ")
-      (let [v @d]
-        (p/write! source v)))
-    (println "future started, return source")
-    ;; Return source
-    source))
+  "Source for future or promise.
+  Optionally initial-state can be specified and that will
+  be returned as the source value until the future computation
+  is done."
+  ([d] (future-source d nil))
+  ([d initial-value]
+   (let [[source set-state!] (use-state initial-value)]
+     ;; Wait for future to complete in another thread and send value
+     (future (set-state! @d))
+     source)))
 
 (def ^:private future-type (type (future 1)))
 (def ^:private promise-type (type (promise)))
