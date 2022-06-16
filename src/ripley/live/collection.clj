@@ -103,7 +103,8 @@
            ;; Send tombstone to sources that were removed, so context will send
            ;; deletion patch
            (doseq [removed-key removed-keys
-                   :let [source (:source (get @components-by-key removed-key))]]
+                   :let [source (:source (get @components-by-key removed-key))]
+                   :when source]
              (p/write! source :ripley.live/tombstone))
 
            ;; Go through key-ops for still active children
