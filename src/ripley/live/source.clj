@@ -30,7 +30,9 @@
 (defrecord ComputedSource [f unlisten-sources input-values listeners]
   p/Source
   (current-value [_] (apply f @input-values))
-  (listen! [_ listener]
+  (listen! [this listener]
+    ;; Call listener immediately with the value
+    (listener (p/current-value this))
     (swap! listeners conj listener)
     #(swap! listeners disj listener))
   (close! [_]
@@ -171,11 +173,12 @@
   (c= (get %parent-source key)))
 
 
-(defrecord SourceWithListeners [listeners current-value-fn cleanup-fn]
+(defrecord SourceWithListeners [listeners current-value-fn cleanup-fn has-listener?]
   p/Source
   (current-value [_]
     (current-value-fn))
   (listen! [_ listener]
+    (deliver has-listener? true)
     (swap! listeners conj listener)
     #(swap! listeners disj listener))
   (close! [_]
@@ -189,7 +192,7 @@
 
 (defn source-with-listeners
   "Create new source that tracks listeners in a new atom.
-  Returns vector of [source listeners-atom].
+  Returns vector of [source listeners-atom has-listener-promise].
 
   Calling ripley.live.protocols/write! on this source will send
   the written value to all currently registered listeners.
@@ -200,10 +203,12 @@
    (source-with-listeners current-value-fn nil))
   ([current-value-fn cleanup-fn]
    (let [listeners (atom #{})
+         has-listener? (promise)
          source (->SourceWithListeners listeners
                                        current-value-fn
-                                       cleanup-fn)]
-     [source listeners])))
+                                       cleanup-fn
+                                       has-listener?)]
+     [source listeners has-listener?])))
 
 (defn use-state
   "Create a source for local (per page render) state.
@@ -236,9 +241,18 @@
   is done."
   ([d] (future-source d nil))
   ([d initial-value]
-   (let [[source set-state!] (use-state initial-value)]
+   (let [[source _ has-listener?]
+         (source-with-listeners
+          #(if (realized? d)
+             @d
+             initial-value))]
      ;; Wait for future to complete in another thread and send value
-     (future (set-state! @d))
+     (future
+       ;; Wait until there is someone listening to avoid losing update.
+       ;; This avoids setting the value right after creation and
+       ;; before any UI element has had time to add listeners.
+       (when @has-listener?
+         (p/write! source @d)))
      source)))
 
 (def ^:private future-type (type (future 1)))

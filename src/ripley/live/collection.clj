@@ -76,9 +76,10 @@
 (defn- by-key [key coll]
   (into {} (map (juxt key identity)) coll))
 
-(defn- listen-collection! [source initial-collection collection-id key render components-by-key]
+(defn- listen-collection! [source initial-collection collection-id key render initial-components-by-key]
   (log/debug "Start collection listener" collection-id)
-  (let [by-key (partial by-key key)
+  (let [components-by-key (atom initial-components-by-key)
+        by-key (partial by-key key)
         old-state (atom {:by-key (by-key initial-collection)
                          :keys (map key initial-collection)})
         ctx dynamic/*live-context*]
@@ -175,11 +176,11 @@
         collection-id (p/register! ctx nil :_ignore {})
 
 
-        ;; Store individual :source and :component-id for entities in an atom
+        ;; Store individual :source and :component-id for entities
         components-by-key
-        (atom (into {}
-                    (map (juxt key (partial create-component ctx render)))
-                    initial-collection))
+        (into {}
+              (map (juxt key (partial create-component ctx render)))
+              initial-collection)
 
         container-element-name (h/element-name container-element)
         container-element-classes (h/element-class-names container-element)]
@@ -196,7 +197,7 @@
             " data-rl=\"" collection-id "\">")
 
     ;; Render live components for each initial value
-    (doseq [[_k {:keys [component-id source]}] @components-by-key]
+    (doseq [[_k {:keys [component-id source]}] components-by-key]
       (dynamic/with-component-id component-id
         (render (p/current-value source))))
     (h/out! "</" container-element-name ">")))
