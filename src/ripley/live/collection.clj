@@ -39,10 +39,6 @@
                new-collection-by-key (by-key new-collection)
                new-collection-keys (map key new-collection)
 
-               ;; Determine keys that are removed or added and the new key order
-               ;;{:keys [removed-keys key-ops]}
-               ;;(diff-ordered old-collection-keys new-collection-keys)
-
                old-key-set (set old-collection-keys)
                new-key-set (set new-collection-keys)
                removed-keys (set/difference old-key-set new-key-set)
