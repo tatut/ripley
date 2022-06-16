@@ -12,62 +12,6 @@
             [ripley.live.patch :as patch]
             [taoensso.timbre :as log]))
 
-(defn- diff-ordered
-  "Diff two ordered collections of keys, returns removals
-  additions and the new order of keys.
-
-  Supports removals from any place and additions to between elements.
-  Doesn't support reordering of existing elements."
-  [a-list b-list]
-
-  (let [a-set (into #{} a-list)
-        b-set (into #{} b-list)
-        removed-keys (set/difference a-set b-set)
-        added-keys (set/difference b-set a-set)]
-    {:removed-keys removed-keys
-     :added-keys added-keys
-     :key-ops
-     ;; Generate operations to do for keys after deletions
-     ;; have been removed
-     (let [old-key-idx (into {}
-                             (map-indexed (fn [i k] [k i]))
-                             (remove removed-keys a-list))]
-       ;; Go through rest of items
-       (loop [idx 0
-              last-key nil
-              [b & b-list] b-list
-              keys []]
-         (if-not b
-           keys
-           (let [old-idx (old-key-idx b)]
-             (cond
-               ;; Added here
-               (nil? old-idx)
-               (recur idx ; don't increment
-                      b
-                      b-list
-                      (conj keys
-                            (if last-key
-                              [b :insert-after last-key]
-                              [b :prepend])))
-
-               ;; Moved here
-               (not= old-idx idx)
-               (recur (inc idx)
-                      b
-                      b-list
-                      (conj keys
-                            (if last-key
-                              [b :move-after last-key]
-                              [b :move-first])))
-
-               ;; No change in position
-               :else
-               (recur (inc idx)
-                      b
-                      b-list
-                      (conj keys [b :compare])))))))}))
-
 (defn- create-component [ctx render value]
   (let [source (atom/atom-source (atom value))]
     {:source source
@@ -96,8 +40,26 @@
                new-collection-keys (map key new-collection)
 
                ;; Determine keys that are removed or added and the new key order
-               {:keys [removed-keys key-ops]}
-               (diff-ordered old-collection-keys new-collection-keys)]
+               ;;{:keys [removed-keys key-ops]}
+               ;;(diff-ordered old-collection-keys new-collection-keys)
+
+               old-key-set (set old-collection-keys)
+               new-key-set (set new-collection-keys)
+               removed-keys (set/difference old-key-set new-key-set)
+               added-keys (set/difference new-key-set old-key-set)
+
+               ;; If list of old keys (minus removed) differs
+               ;; from list of new keys (minus additions), we need
+               ;; to send a child order patch.
+               new-keys-without-added
+               (remove added-keys new-collection-keys)
+
+               order-change
+               (when (not= (remove removed-keys old-collection-keys)
+                           new-keys-without-added)
+                 (patch/child-order collection-id
+                                    (mapv (comp :component-id @components-by-key)
+                                          new-keys-without-added)))]
            (reset! old-state {:by-key new-collection-by-key
                               :keys new-collection-keys})
            ;; Send tombstone to sources that were removed, so context will send
@@ -107,54 +69,40 @@
                    :when source]
              (p/write! source :ripley.live/tombstone))
 
-           ;; Go through key-ops for still active children
-           (loop [[key-op & key-ops] key-ops
-                  patches []]
-             (if-not key-op
-               ;; Send the gathered patches, if any
+           ;; Set child order for existing children (if changed)
+           ;; and add any new ones
+           (loop [prev-key nil
+                  [new-key & new-keys] new-collection-keys
+                  patches (if order-change [order-change] [])]
+             (if-not new-key
                (when (seq patches)
                  (p/send! ctx patches))
-               (let [[key op & args] key-op
-                     old-value (get old-collection-by-key key)
-                     new-value (get new-collection-by-key key)
-                     {:keys [component-id source]}
+
+               (let [old-value (get old-collection-by-key new-key)
+                     new-value (get new-collection-by-key new-key)
+                     source
                      (when old-value
-                       (@components-by-key key))]
+                       (:source (@components-by-key new-key)))]
+                 (if-not (added-keys new-key)
+                   (do
+                     ;; Send update if needed to existing item
+                     (when (and (some? old-value)
+                                (not= old-value new-value))
+                       (p/write! source new-value))
 
-                 ;; Send update if needed to existing item
-                 (when (and (some? old-value)
-                            (not= old-value new-value))
-                   (p/write! source new-value))
+                     (recur new-key new-keys patches))
 
-                 ;; Handle key operations to reposition/insert children
-                 (case op
-                   ;; Element stayed in same position, do nothing
-                   :compare
-                   (recur key-ops patches)
-
-                   ;; Existing element moved position to first
-                   :move-first
-                   (recur key-ops
-                          (conj patches (patch/move-first component-id)))
-
-                   ;; Existing element moved
-                   :move-after
-                   (let [after-key (first args)
-                         after-component-id (:component-id (@components-by-key after-key))]
-                     (recur key-ops
-                            (conj patches (patch/move-after after-component-id component-id))))
-                   ;; New element
-                   (:insert-after :prepend)
+                   ;; Added, render this after given prev child id
                    (let [after-component-id
-                         (when (= op :insert-after)
-                           (:component-id (@components-by-key (first args))))
+                         (when prev-key
+                           (:component-id (@components-by-key prev-key)))
                          {new-id :component-id :as component}
                          (create-component ctx render new-value)
                          rendered (dynamic/with-live-context ctx
                                     (dynamic/with-component-id new-id
                                       (render-to-string render new-value)))]
-                     (swap! components-by-key assoc key component)
-                     (recur key-ops
+                     (swap! components-by-key assoc new-key component)
+                     (recur new-key new-keys
                             (conj patches
                                   (if after-component-id
                                     (patch/insert-after after-component-id rendered)
@@ -185,11 +133,10 @@
         container-element-name (h/element-name container-element)
         container-element-classes (h/element-class-names container-element)]
 
-    (log/debug "initial collection: " initial-collection)
+    (log/debug "Initial collection: " (count initial-collection) "items")
     (listen-collection!
      source initial-collection collection-id
      key render components-by-key)
-
 
     (h/out! "<" container-element-name
             (when (seq container-element-classes)
@@ -197,7 +144,8 @@
             " data-rl=\"" collection-id "\">")
 
     ;; Render live components for each initial value
-    (doseq [[_k {:keys [component-id source]}] components-by-key]
+    (doseq [{:keys [component-id source]} (map (comp components-by-key key)
+                                               initial-collection)]
       (dynamic/with-component-id component-id
         (render (p/current-value source))))
     (h/out! "</" container-element-name ">")))
