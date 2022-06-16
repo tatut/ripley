@@ -76,10 +76,9 @@
 (defn- by-key [key coll]
   (into {} (map (juxt key identity)) coll))
 
-(defn- listen-collection! [source collection-id key render components-by-key]
+(defn- listen-collection! [source initial-collection collection-id key render components-by-key]
   (log/debug "Start collection listener" collection-id)
-  (let [initial-collection  (p/current-value source)
-        by-key (partial by-key key)
+  (let [by-key (partial by-key key)
         old-state (atom {:by-key (by-key initial-collection)
                          :keys (map key initial-collection)})
         ctx dynamic/*live-context*]
@@ -187,7 +186,7 @@
 
     (log/debug "initial collection: " initial-collection)
     (listen-collection!
-     source collection-id
+     source initial-collection collection-id
      key render components-by-key)
 
 
