@@ -151,4 +151,5 @@ window.ripley = {
     }
 }
 
-_rs = ripley.send.bind(ripley)
+_rs = ripley.send.bind(ripley);
+_rg = ripley.get.bind(ripley);

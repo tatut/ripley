@@ -83,6 +83,16 @@
   {:type ">"
    :js-eval "elt.parentElement.insertAdjacentElement(\"beforeend\",elt);"})
 
+(define-patch-method child-order
+  "Set order of children"
+  {:type "O"
+   :js-eval "
+var fc = elt.insertAdjacentElement(\"afterbegin\",_rg(payload[0]));
+for(let i=1;i<payload.length;i++) {
+  fc = fc.insertAdjacentElement(\"afterend\",_rg(payload[i]));
+}
+ "})
+
 (define-patch-method attributes
   "Set element attributes. Nil value removes attribute."
   {:type "@"
