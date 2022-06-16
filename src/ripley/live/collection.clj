@@ -5,7 +5,6 @@
             [ripley.impl.output :refer [render-to-string]]
             [ripley.live.protocols :as p]
             [ripley.live.atom :as atom]
-            [clojure.core.async :as async :refer [go-loop <! >!]]
             [clojure.set :as set]
             [clojure.string :as str]
             [ripley.live.source :as source]
