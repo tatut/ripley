@@ -32,7 +32,7 @@
       (p/listen!
        source
        (fn collection-source-listener [new-collection]
-         (log/debug "new collection" new-collection)
+         (log/debug "New collection:" (count new-collection) "items")
          (let [{old-collection-by-key :by-key
                 old-collection-keys :keys} @old-state
 
