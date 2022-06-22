@@ -18,12 +18,22 @@
 (defn- cleanup-before-render
   "Cleanup component from context before it is rerendered.
   This will remove stale callbacks and children. Recursively cleans up child components."
-  [state id]
+  [unlisten? state id]
   (let [{child-component-ids :children
-         callback-ids :callbacks} (get-in state [:components id])
-        state (reduce cleanup-before-render state child-component-ids)]
+         callback-ids :callbacks
+         unlisten :unlisten} (get-in state [:components id])
+        state (reduce (partial cleanup-before-render true) state child-component-ids)]
+
+    ;; Any child components that a parent rerender will overwrite
+    ;; must unlisten from their sources, otherwise we will get
+    ;; content for non-existant elements if it changes.
+    (when (and unlisten? unlisten)
+      (unlisten))
     (-> state
-        (update-in [:components id] assoc :children #{} :callbacks #{})
+        (update-in [:components id] assoc
+                   :children #{}
+                   :callbacks #{}
+                   :unlisten (if unlisten? nil unlisten))
         (update :components #(reduce dissoc % child-component-ids))
         (update :callbacks #(reduce dissoc % callback-ids)))))
 
@@ -38,7 +48,7 @@
 
   (log/trace "component " id " has " val)
   (when (= :replace patch)
-    (swap! (:state ctx) cleanup-before-render id))
+    (swap! (:state ctx) (partial cleanup-before-render false) id))
   (if (= val :ripley.live/tombstone)
     ;; source says this component should be removed, send deletion
     ;; patch to client (unless it targets parent, like attributes)
