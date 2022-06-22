@@ -23,7 +23,6 @@
          callback-ids :callbacks
          unlisten :unlisten} (get-in state [:components id])
         state (reduce (partial cleanup-before-render true) state child-component-ids)]
-
     ;; Any child components that a parent rerender will overwrite
     ;; must unlisten from their sources, otherwise we will get
     ;; content for non-existant elements if it changes.
@@ -45,7 +44,6 @@
     :or {patch :replace
          should-update? (constantly true)}}
    val]
-
   (log/trace "component " id " has " val)
   (when (= :replace patch)
     (swap! (:state ctx) (partial cleanup-before-render false) id))
@@ -105,7 +103,6 @@
                       ;; Register new component as child of if we are inside a component
                       (update-in state [:components parent-component-id :children] conj id)
                       state)))]
-
       ;; Source may be missing (some parent components are registered without their own source)
       ;; If source is present, add listener for it
       (when source
