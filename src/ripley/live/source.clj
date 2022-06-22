@@ -27,12 +27,15 @@
     x
     (to-source x)))
 
-(defrecord ComputedSource [f unlisten-sources input-values listeners]
+(defrecord ComputedSource [f initial-value unlisten-sources input-values listeners]
   p/Source
   (current-value [_] (apply f @input-values))
   (listen! [this listener]
-    ;; Call listener immediately with the value
-    (listener (p/current-value this))
+    ;; Call listener immediately with the value, if the value
+    ;; is different from the initial value
+    (let [cv (p/current-value this)]
+      (when (not= initial-value cv)
+        (listener cv)))
     (swap! listeners conj listener)
     #(swap! listeners disj listener))
   (close! [_]
@@ -68,7 +71,7 @@
   (let [sources (mapv source sources)
         input-values (atom (mapv p/current-value sources))
         listeners (atom #{})
-
+        initial-value (apply f @input-values)
         update! (fn [i value]
                   (let [old-value (apply f @input-values)
                         new-input-values (swap! input-values assoc i value)
@@ -79,6 +82,7 @@
 
     (->ComputedSource
      f
+     initial-value
      ;; Add listeners for all input sources
      (doall
       (map-indexed (fn [i s]
