@@ -43,17 +43,17 @@
 (defn files [{:keys [name-filter] :as ctx} path]
   (h/html
    [:div {:style "padding-left: 1rem;"}
-    [::h/live name-filter
-     (fn [name-filter]
-       (h/html
-        [:div
-         [::h/for [file (.listFiles path)
-                   :let [name (.getName file)]
-                   :when (or (.isDirectory file)
-                             (str/includes? name name-filter))]
-          [::h/if (.isDirectory file)
-           (folder ctx file)
-           [:div {:style "padding-left: 1.5rem;"} name]]]]))]]))
+    [:div
+     [::h/for [file (.listFiles path)
+               :let [name (.getName file)]]
+      [::h/if (.isDirectory file)
+       (folder ctx file)
+       [:div {:style [::h/live (source/computed
+                                #(or (str/blank? %)
+                                     (str/includes? name %)) name-filter)
+                      #(if %
+                         "padding-left: 1.5rem;"
+                         "display: none;")]} name]]]]]))
 
 (defn folder [{:keys [expanded toggle-expanded!] :as ctx} path]
   (let [name (-> path .getCanonicalFile .getName)
@@ -78,8 +78,8 @@
                 #{}
                 (paths-leading-to-matching-files
                  path (matching-files path new-name-filter)))]
-    (set-expanded! paths)
-    (set-name-filter! new-name-filter)))
+    (set-name-filter! new-name-filter)
+    (set-expanded! paths)))
 
 (defn filetree-app [path]
   (let [[expanded set-expanded!] (source/use-state #{})
