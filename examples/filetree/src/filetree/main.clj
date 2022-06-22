@@ -40,37 +40,37 @@
 
 (declare folder)
 
-(defn files [{:keys [name-filter] :as ctx} path expanded?]
+(defn files [{:keys [name-filter] :as ctx} path]
   (h/html
    [:div {:style "padding-left: 1rem;"}
-    [::h/when expanded?
-     [::h/live name-filter
-      (fn [name-filter]
-        (h/html
-         [:div
-          [::h/for [file (.listFiles path)
-                    :let [name (.getName file)]
-                    :when (or (.isDirectory file)
-                              (str/includes? name name-filter))]
-           [::h/if (.isDirectory file)
-            (folder ctx file)
-            [:div {:style "padding-left: 1.5rem;"} name]]]]))]]]))
+    [::h/live name-filter
+     (fn [name-filter]
+       (h/html
+        [:div
+         [::h/for [file (.listFiles path)
+                   :let [name (.getName file)]
+                   :when (or (.isDirectory file)
+                             (str/includes? name name-filter))]
+          [::h/if (.isDirectory file)
+           (folder ctx file)
+           [:div {:style "padding-left: 1.5rem;"} name]]]]))]]))
 
 (defn folder [{:keys [expanded toggle-expanded!] :as ctx} path]
   (let [name (-> path .getCanonicalFile .getName)
-        id (.getAbsolutePath path)]
+        id (.getAbsolutePath path)
+        expanded? (source/computed #(contains? % id) expanded)]
     (h/html
-     [::h/live expanded
-      (fn [expanded]
-        (let [expanded? (expanded id)]
-          (h/html
-           [:div
-            [:div {:style "display: flex;"}
-             [:button {:on-click (partial toggle-expanded! id)}
-              [::h/if expanded? "-" "+"]]
-             [:span name]]
+     [::h/live expanded?
+      (fn [expanded?]
+        (h/html
+         [:div
+          [:div {:style "display: flex;"}
+           [:button {:on-click (partial toggle-expanded! id)}
+            [::h/if expanded? "-" "+"]]
+           [:span name]]
 
-            (files ctx path expanded?)])))])))
+          (when expanded?
+            (files ctx path))]))])))
 
 (defn search! [set-name-filter! set-expanded! path new-name-filter]
   ;; Expand all paths and parents that contain matching files
