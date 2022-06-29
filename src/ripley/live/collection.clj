@@ -55,21 +55,31 @@
                            new-keys-without-added)
                  (patch/child-order collection-id
                                     (mapv (comp :component-id @components-by-key)
-                                          new-keys-without-added)))]
+                                          new-keys-without-added)))
+               patches
+               (cond-> []
+                 (seq removed-keys)
+                 (conj (patch/delete-many
+                        (mapv #(:component-id (get @components-by-key %))
+                              removed-keys)))
+
+                 order-change
+                 (conj order-change))]
+
            (reset! old-state {:by-key new-collection-by-key
                               :keys new-collection-keys})
-           ;; Send tombstone to sources that were removed, so context will send
-           ;; deletion patch
+           ;; Send tombstone to sources that were removed
+           ;; so context will cleanup the components and close the sources
            (doseq [removed-key removed-keys
                    :let [source (:source (get @components-by-key removed-key))]
                    :when source]
-             (p/write! source :ripley.live/tombstone))
+             (p/write! source :ripley.live/tombstone-no-funeral))
 
            ;; Set child order for existing children (if changed)
            ;; and add any new ones
            (loop [prev-key nil
                   [new-key & new-keys] new-collection-keys
-                  patches (if order-change [order-change] [])]
+                  patches patches]
              (if-not new-key
                (when (seq patches)
                  (p/send! ctx patches))

@@ -99,7 +99,7 @@ window.ripley = {
             for(var p = 0; p < patchlen; p++) {
                 var patch = patches[p];
                 var id = patch[0];
-                var elt = ripley.get(id);
+                var elt = id === null ? document : ripley.get(id);
                 if(elt == null) {
                     console.error("Received content for non-existant element: ", id,
                                   "msg:", msg);

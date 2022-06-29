@@ -63,6 +63,11 @@
   {:type "D" :payload? false
    :js-eval "elt.parentElement.removeChild(elt);"})
 
+(define-patch-method delete-many
+  "Delete multiple elements."
+  {:type "D+"
+   :js-eval "payload.forEach(id=>{let e=_rg(id); e.parentNode.removeChild(e)});"})
+
 (define-patch-method insert-after
   "Insert HTML after the end of component."
   {:type "F"

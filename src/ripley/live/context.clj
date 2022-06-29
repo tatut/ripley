@@ -47,16 +47,23 @@
   (log/trace "component " id " has " val)
   (when (= :replace patch)
     (swap! (:state ctx) (partial cleanup-before-render false) id))
-  (if (= val :ripley.live/tombstone)
+  (cond
     ;; source says this component should be removed, send deletion
     ;; patch to client (unless it targets parent, like attributes)
     ;; and close the source
+    (= val :ripley.live/tombstone)
     (do
       (when-not (patch/target-parent? patch)
         (send-fn! (:channel @state)
                   [(patch/delete id)]))
       (p/close! source))
 
+    ;; Marker that this component was already removed from client
+    ;; by a parent, don't send deletion patch just close source.
+    (= val :ripley.live/tombstone-no-funeral)
+    (p/close! source)
+
+    :else
     (when (and (some? val) ;; PENDING: allow nil as value now that we are not using channels
                (should-update? val))
       (let [target-id (if (patch/target-parent? patch)

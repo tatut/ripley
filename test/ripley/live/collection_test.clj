@@ -50,7 +50,10 @@
        :set-items!
        (fn [[new-items expected-patches]]
          (reset! items new-items)
-         (is (= expected-patches (take! sent-ch))))})))
+         (let [received-patches (take! sent-ch)]
+           (if (fn? expected-patches)
+             (expected-patches received-patches)
+             (is (= expected-patches received-patches)))))})))
 
 (deftest collection-update-process
   (let [{:keys [set-items!]} (setup-live-collection)]
@@ -70,7 +73,7 @@
 
              ;; Remove second item, sends deletion patch
              [[{:k 1 :v 1} {:k 3 :v 3}]
-              [[2 "D"]]]
+              [[nil "D+" [2]]]]
 
              ;; Change value of third item
              [[{:k 1 :v 1} {:k 3 :v "FIXED"}]
@@ -93,5 +96,23 @@
                {:k 5 :v 5} {:k 1 :v 1} {:k 3 :v "FIXED"} {:k 6 :v 6} {:k 4 :v 4}
                {:k "b-" :v -666}]
               [[0 "P" "7=b+/666"]
-               [4 "F" "8=b-/-666"]]]]]
+               [4 "F" "8=b-/-666"]]]
+
+             ;; remove 3, change order
+             [[{:k "b-" :v -666}
+               {:k "b+" :v 666}
+               {:k 1 :v 1}
+               {:k 5 :v 5}
+               {:k 6 :v 6}
+               {:k 4 :v 4}]
+              [[nil "D+" [3]]
+               [0 "O" [8 7 1 5 6 4]]]]
+
+             ;; remove all
+             [[]
+              (fn [[[no-id d+ ids] :as patches]]
+                (is (= 1 (count patches)))
+                (is (nil? no-id))
+                (is (= d+ "D+"))
+                (is (every? (set ids) [8 7 1 5 6 4])))]]]
       (set-items! items-patches))))
