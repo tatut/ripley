@@ -1,5 +1,6 @@
 # ripley
 
+![test workflow](https://github.com/tatut/ripley/actions/workflows/test.yml/badge.svg)
 
 Ripley is a fast server-side rendered web UI toolkit with live components.
 
