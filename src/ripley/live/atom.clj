@@ -1,8 +1,7 @@
 (ns ripley.live.atom
   "Live component that tracks an atom's value"
   (:require [ripley.live.protocols :as p]
-            [clojure.core.async :as async :refer [go >!! >!]]
-            [taoensso.timbre :as log]))
+            [clojure.tools.logging :as log]))
 
 (defrecord AtomSource [input-atom process-value key listeners]
   p/Source

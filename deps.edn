@@ -4,7 +4,7 @@
         http-kit/http-kit {:mvn/version "2.5.1"}
         ring/ring-core {:mvn/version "1.8.1"}
         cheshire/cheshire {:mvn/version "5.1.0"}
-        com.taoensso/timbre {:mvn/version "5.1.0"}}
+        org.clojure/tools.logging {:mvn/version "1.2.4"}}
  :aliases
  {:dev {:extra-deps {org.clojure/test.check {:mvn/version "1.1.0"}
                      org.clojars.czan/stateful-check {:mvn/version "0.4.2"}}}

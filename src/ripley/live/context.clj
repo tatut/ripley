@@ -10,7 +10,7 @@
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
             [ripley.impl.dynamic :as dynamic]
-            [taoensso.timbre :as log])
+            [clojure.tools.logging :as log])
   (:import (java.util.concurrent Executors TimeUnit ScheduledExecutorService Future)))
 
 (set! *warn-on-reflection* true)

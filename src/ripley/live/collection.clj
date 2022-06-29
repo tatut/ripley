@@ -10,7 +10,7 @@
             [ripley.live.source :as source]
             [ripley.impl.dynamic :as dynamic]
             [ripley.live.patch :as patch]
-            [taoensso.timbre :as log]))
+            [clojure.tools.logging :as log]))
 
 (defn- create-component [ctx render value]
   (let [source (atom/atom-source (atom value))]
