@@ -4,7 +4,6 @@
   (:require [ripley.html :as h]
             [ripley.impl.output :refer [render-to-string]]
             [ripley.live.protocols :as p]
-            [ripley.live.atom :as atom]
             [clojure.set :as set]
             [clojure.string :as str]
             [ripley.live.source :as source]
@@ -12,15 +11,18 @@
             [ripley.live.patch :as patch]
             [clojure.tools.logging :as log]))
 
-(defn- create-component [ctx render value]
-  (let [source (atom/atom-source (atom value))]
+(defn- create-component [ctx item-source-fn render value]
+  (let [[source set-value!] (source/use-state value)
+        source (item-source-fn source)]
     {:source source
+     :set-value! set-value!
      :component-id (p/register! ctx source render {})}))
 
 (defn- by-key [key coll]
   (into {} (map (juxt key identity)) coll))
 
-(defn- listen-collection! [source initial-collection collection-id key render initial-components-by-key]
+(defn- listen-collection!
+  [source item-source-fn initial-collection collection-id key render initial-components-by-key]
   (log/debug "Start collection listener" collection-id)
   (let [components-by-key (atom initial-components-by-key)
         by-key (partial by-key key)
@@ -56,24 +58,24 @@
                  (patch/child-order collection-id
                                     (mapv (comp :component-id @components-by-key)
                                           new-keys-without-added)))
+
+               removed-components (select-keys @components-by-key removed-keys)
                patches
                (cond-> []
                  (seq removed-keys)
                  (conj (patch/delete-many
-                        (mapv #(:component-id (get @components-by-key %))
-                              removed-keys)))
+                        (mapv :component-id (vals removed-components))))
 
                  order-change
                  (conj order-change))]
 
            (reset! old-state {:by-key new-collection-by-key
                               :keys new-collection-keys})
-           ;; Send tombstone to sources that were removed
-           ;; so context will cleanup the components and close the sources
-           (doseq [removed-key removed-keys
-                   :let [source (:source (get @components-by-key removed-key))]
-                   :when source]
-             (p/write! source :ripley.live/tombstone-no-funeral))
+
+           ;; Cleanup components that were removed
+           (swap! components-by-key #(reduce dissoc % removed-keys))
+           (doseq [{id :component-id} removed-components]
+             (p/deregister! ctx id))
 
            ;; Set child order for existing children (if changed)
            ;; and add any new ones
@@ -86,15 +88,15 @@
 
                (let [old-value (get old-collection-by-key new-key)
                      new-value (get new-collection-by-key new-key)
-                     source
+                     set-value!
                      (when old-value
-                       (:source (@components-by-key new-key)))]
+                       (:set-value! (@components-by-key new-key)))]
                  (if-not (added-keys new-key)
                    (do
                      ;; Send update if needed to existing item
                      (when (and (some? old-value)
                                 (not= old-value new-value))
-                       (p/write! source new-value))
+                       (set-value! new-value))
 
                      (recur new-key new-keys patches))
 
@@ -103,7 +105,7 @@
                          (when prev-key
                            (:component-id (@components-by-key prev-key)))
                          {new-id :component-id :as component}
-                         (create-component ctx render new-value)
+                         (create-component ctx item-source-fn render new-value)
                          rendered (dynamic/with-live-context ctx
                                     (dynamic/with-component-id new-id
                                       (render-to-string render new-value)))]
@@ -115,12 +117,35 @@
                                     (patch/prepend collection-id rendered)))))))))))))))
 
 (defn live-collection
-  [{:keys [render ; function to render one entity
-           key ; function to extract entity identity (like an :id column)
-           source ; source that provides the collection
-           container-element ; HTML element type of container, defaults to :span
-           ]
-    :or {container-element :span}}]
+  "Render a live-collection that automatically inserts and removes
+  new items as they are added to the source.
+
+  This can be used to render eg. tables that have dynamic items.
+
+  Options:
+
+  :render  Function to render one entity, takes the entity as parameter
+
+  :key     Function to extract entity identity (like an :id column).
+           Key is used to determine if item is already in the collection
+
+  :source  The source that provides the collection.
+
+  :container-element
+           Keyword for the container HTML element (defaults to :span).
+           Use :tbody when rendering tables.
+
+  :item-source-fn
+           Optional function to pass each source generated for individual
+           items through.
+           This is useful if you want to make computed sources for items
+           that consider some additional data as well.
+
+
+  "
+  [{:keys [render key source container-element item-source-fn]
+    :or {container-element :span
+         item-source-fn identity}}]
   (let [ctx dynamic/*live-context*
         source (source/source source)
 
@@ -133,7 +158,7 @@
         ;; Store individual :source and :component-id for entities
         components-by-key
         (into {}
-              (map (juxt key (partial create-component ctx render)))
+              (map (juxt key (partial create-component ctx item-source-fn render)))
               initial-collection)
 
         container-element-name (h/element-name container-element)
@@ -141,7 +166,7 @@
 
     (log/debug "Initial collection: " (count initial-collection) "items")
     (listen-collection!
-     source initial-collection collection-id
+     source item-source-fn initial-collection collection-id
      key render components-by-key)
 
     (h/out! "<" container-element-name

@@ -15,14 +15,14 @@
 
 (set! *warn-on-reflection* true)
 
-(defn- cleanup-before-render
-  "Cleanup component from context before it is rerendered.
+(defn- cleanup-component
+  "Cleanup component from context.
   This will remove stale callbacks and children. Recursively cleans up child components."
   [unlisten? state id]
   (let [{child-component-ids :children
          callback-ids :callbacks
          unlisten :unlisten} (get-in state [:components id])
-        state (reduce (partial cleanup-before-render true) state child-component-ids)]
+        state (reduce (partial cleanup-component true) state child-component-ids)]
     ;; Any child components that a parent rerender will overwrite
     ;; must unlisten from their sources, otherwise we will get
     ;; content for non-existant elements if it changes.
@@ -46,7 +46,7 @@
    val]
   (log/trace "component " id " has " val)
   (when (= :replace patch)
-    (swap! (:state ctx) (partial cleanup-before-render false) id))
+    (swap! (:state ctx) (partial cleanup-component false) id))
   (cond
     ;; source says this component should be removed, send deletion
     ;; patch to client (unless it targets parent, like attributes)
@@ -142,8 +142,9 @@
     nil)
 
   (deregister! [_this id]
-    (let [{:keys [source unlisten]} (get-in @state [:components id])]
-      (when unlisten (unlisten))
+    (let [current-state @state
+          {source :source} (get-in current-state [:components id])]
+      (cleanup-component true current-state id)
       (when source (p/close! source))
       (swap! state update :components dissoc id)
       nil))
