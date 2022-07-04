@@ -7,5 +7,5 @@
         http-kit {:mvn/version "2.4.0-alpha6"}
         re-html-template {:git/url "https://github.com/tatut/re-html-template.git"
                           :sha "d1aa45b4df32ec79531f7937b6726074166183f8"}
-        com.taoensso/timbre {:mvn/version "5.1.0"}}
+        org.clojure/tools.logging {:mvn/version "1.2.4"}}
  :aliases {:run {:main-opts ["-m" "todomvc.main"]}}}

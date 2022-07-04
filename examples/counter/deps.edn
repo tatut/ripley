@@ -2,5 +2,5 @@
  :deps {ripley {:local/root "../.."}
         compojure {:mvn/version "1.6.1"}
         http-kit {:mvn/version "2.5.3"}
-        com.taoensso/timbre {:mvn/version "5.1.0"}}
+        org.clojure/tools.logging {:mvn/version "1.2.4"}}
  :aliases {:run {:main-opts ["-m" "counter.main"]}}}
