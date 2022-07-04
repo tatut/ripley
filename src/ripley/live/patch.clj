@@ -120,5 +120,7 @@ for(let i=1;i<payload.length;i++) {
               (str/join "\n"
                         (for [type (keys (methods js-eval-script))]
                           (str "case \"" type "\":" (js-eval-script type) " break;")))
-              "\ndefault: console.error(\"Unrecognized patch method: \", method);"
+              "\ndefault: let pf = window[\"ripley_patch_\"+method];
+if(pf!==undefined) pf(elt,payload);
+else console.error(\"Unrecognized patch method: \", method);"
               "\n}")))))
