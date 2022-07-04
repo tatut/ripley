@@ -111,6 +111,12 @@ for(let i=1;i<payload.length;i++) {
    :render-mode :json
    :js-eval "(new Function(payload)).call(elt);"})
 
+(define-patch-method template
+  "Fill element from template"
+  {:type "T"
+   :render-mode :json
+   :js-eval "ripley.T(elt,payload);"})
+
 (def live-client-script
   (delay
     (-> "live-client-template.js" io/resource slurp

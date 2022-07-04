@@ -148,7 +148,19 @@ window.ripley = {
                 eval(script.text+"")
             })
         }
+    },
+    T: function(templateElt, data) {
+        let target = document.querySelector(data[0]);
+        let tpl = templateElt.getAttribute("data-tpl");
+        target.textContent="";
+        for(let i=1;i<data.length;i++) {
+            let n = document.importNode(templateElt.content,true).firstChild;
+            n.classList.add("templateItem"+(i%2==0?"Even":"Odd"));
+            n.innerHTML = n.innerHTML.replace(/{{_rl(\d+)}}/g, (_m,k) => data[i][parseInt(k)]);
+            target.appendChild(n);
+        };
     }
+
 }
 
 _rs = ripley.send.bind(ripley);
