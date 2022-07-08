@@ -3,7 +3,8 @@
   (:require [ripley.impl.output :as output]
             [ripley.impl.dynamic :as dynamic]
             [ripley.html :as h]
-            [ripley.live.protocols :as p]))
+            [ripley.live.protocols :as p]
+            [cheshire.core :as cheshire]))
 
 
 ;; Define a proxy map that automatically creates names for
@@ -59,8 +60,19 @@
         dp (->template-data-proxy)
         id (when ctx (p/register! ctx nil :_ignore {}))
         body (output/render-to-string component dp)
-        fields (template-data-proxy-fields dp)]
+        fields (template-data-proxy-fields dp)
+        initial-value (p/current-value data-source)]
     (p/listen! data-source
                #(p/send! ctx [[id "T" (into [selector] (map fields) %)]]))
-    (h/html [:template {:data-rl id}
-             (h/out! body)])))
+    (h/html
+     [:template {:data-rl id}
+      (h/out! body)])
+    (when (seq initial-value)
+      ;; Output script to set the value immediately, if there is one
+      (h/html
+       [:script
+        "window.requestAnimationFrame(_ => ripley.T(_rg(" id "), "
+        (h/out! (cheshire/encode
+                 (into [selector]
+                       (map fields initial-value))))
+        "));"]))))
