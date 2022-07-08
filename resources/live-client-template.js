@@ -151,13 +151,19 @@ window.ripley = {
     },
     T: function(templateElt, data) {
         let target = document.querySelector(data[0]);
-        let tpl = templateElt.getAttribute("data-tpl");
         target.textContent="";
+        let svg = target.namespaceURI === "http://www.w3.org/2000/svg";
         for(let i=1;i<data.length;i++) {
-            let n = document.importNode(templateElt.content,true).firstChild;
-            n.classList.add("templateItem"+(i%2==0?"Even":"Odd"));
-            n.innerHTML = n.innerHTML.replace(/{{_rl(\d+)}}/g, (_m,k) => data[i][parseInt(k)]);
-            target.appendChild(n);
+            if(svg) {
+                let g = document.createElementNS(target.namespaceURI, "g");
+                g.innerHTML = templateElt.content.firstElementChild.outerHTML.replace(/{{_rl(\d+)}}/g, (_m,k) => data[i][parseInt(k)]);
+                target.appendChild(g.firstElementChild);
+            } else {
+                let n = document.importNode(templateElt.content,true).firstChild;
+                n.classList.add("templateItem"+(i%2==0?"Even":"Odd"));
+                n.innerHTML = n.innerHTML.replace(/{{_rl(\d+)}}/g, (_m,k) => data[i][parseInt(k)]);
+                target.appendChild(n);
+            }
         };
     }
 
