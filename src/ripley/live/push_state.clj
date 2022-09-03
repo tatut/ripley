@@ -46,31 +46,39 @@
 
   The location path is included in the map with key :ripley.live.push-state/path
   all other keys are considered to be query parameters.
+
+  If on-pop-state is omitted, the default will write the value to the
+  source.
   "
-  [path-and-params-source on-pop-state]
-  (let [push-state-fn (str (gensym "_ps"))
-        ctx dyn/*live-context*
-        last-popped (atom nil)
-        component-id (p/register! ctx path-and-params-source
-                                  (partial push-state-query-js push-state-fn)
-                                  {:patch :eval-js
-                                   :should-update? (fn [val]
-                                                     (not= val @last-popped))})
-        callback-id (p/register-callback!
-                     ctx
-                     (fn [arg]
-                       (let [val (->clj arg)]
-                         (reset! last-popped val)
-                         (on-pop-state val))))]
-    (h/out! "<script data-rl=\"" component-id "\">\n"
-            "history.replaceState({s:\"" (->js (p/current-value path-and-params-source)) "\"},document.title)\n"
-            "function " push-state-fn "(state,location) {\n"
-            "var l = window.location; "
-            "window.history.pushState({s:state},\"\","
-            "l.protocol+\"//\"+l.host+location)\n"
-            "}\n"
-            "window.addEventListener(\"popstate\", (s) =>  ripley.send(" callback-id ",[s.state.s]))\n"
-            "</script>\n")))
+  ([path-and-params-source]
+   (push-state path-and-params-source
+               #(p/write! path-and-params-source %)))
+  ([path-and-params-source on-pop-state]
+   (let [push-state-fn (str (gensym "_ps"))
+         ctx dyn/*live-context*
+         last-popped (atom nil)
+         component-id (p/register! ctx path-and-params-source
+                                   (partial push-state-query-js push-state-fn)
+                                   {:patch :eval-js
+                                    :should-update? (fn [val]
+                                                      (and
+                                                       (not (::popped? (meta val)))
+                                                       (not= val @last-popped)))})
+         callback-id (p/register-callback!
+                      ctx
+                      (fn [arg]
+                        (let [val (with-meta (->clj arg) {::popped? true})]
+                          (reset! last-popped val)
+                          (on-pop-state val))))]
+     (h/out! "<script data-rl=\"" component-id "\">\n"
+             "history.replaceState({s:\"" (->js (p/current-value path-and-params-source)) "\"},document.title)\n"
+             "function " push-state-fn "(state,location) {\n"
+             "var l = window.location; "
+             "window.history.pushState({s:state},\"\","
+             "l.protocol+\"//\"+l.host+location)\n"
+             "}\n"
+             "window.addEventListener(\"popstate\", (s) =>  ripley.send(" callback-id ",[s.state.s]))\n"
+             "</script>\n"))))
 
 ;; Allow call with old name
 (def push-state-query push-state)
