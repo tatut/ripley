@@ -96,3 +96,10 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 | redis | Integrate Redis pubsub channels as sources (uses carmine library) |
 | manifold | Integrate manifold library `deferred` and `stream` as source |
 | xtdb | Integrate XTDB query as an automatically updating source |
+
+
+## Changes
+
+### 2023-03-18
+- Support specifying `:should-update?` in `::h/live`
+- `use-state` now returns a third value (update-state! callback)

@@ -217,10 +217,12 @@
 (defn use-state
   "Create a source for local (per page render) state.
 
-  Returns a vector of [value-source set-state!] where
+  Returns a vector of [value-source set-state! update-state!] where
   the value-source is a source that can be used to read/listen
   to the value of the state and set-state! is a callback
-  for setting the new state.
+  for setting the new state. The last update-state! callback
+  is for applying an update to the current value (like `swap!`)
+
 
   This is meant to be used similar to hooks in some
   frontend frameworks."
@@ -233,6 +235,15 @@
      (fn set-state! [new-state]
        (locking state
          (let [old-state (aget state 0)]
+           (when (not= old-state new-state)
+             (aset state 0 new-state)
+             (p/write! source new-state)))))
+
+     ;; Callback to update the value
+     (fn update-state! [update-fn & args]
+       (locking state
+         (let [old-state (aget state 0)
+               new-state (apply update-fn old-state args)]
            (when (not= old-state new-state)
              (aset state 0 new-state)
              (p/write! source new-state)))))]))

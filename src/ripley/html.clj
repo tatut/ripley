@@ -398,7 +398,7 @@
 (defn compile-live
   "Compile special :ripley.html/live element."
   [live-element]
-  (let [{:keys [source component patch container]}
+  (let [{:keys [source component patch container should-update?]}
         (live-source-and-component live-element)
         id-sym (gensym "id")
         comp-sym (gensym "component")
@@ -410,12 +410,15 @@
             "Only :append or :prepend patch methods can have container, which must be a hiccup element vector.")
     `(let [~source-sym (source/source ~source)
            ~comp-sym ~(or component
-                           `(fn [thing#]
-                              (out! (str thing#))))
+                          `(fn [thing#]
+                             (out! (str thing#))))
            ~id-sym (p/register! dynamic/*live-context* ~source-sym ~comp-sym
-                                ~(if patch
-                                   {:patch patch}
-                                   {}))]
+                                ~(merge
+                                  {}
+                                  (when patch
+                                    {:patch patch})
+                                  (when should-update?
+                                    {:should-update? should-update?})))]
        ~(if container
           ;; If there's a container element for append/prepend content
           ;; render that, with any initial content that is available
