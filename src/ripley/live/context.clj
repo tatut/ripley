@@ -45,48 +45,48 @@
          should-update? (constantly true)}}
    val]
   (log/trace "component " id " has " val)
-  (when (= :replace patch)
-    (swap! (:state ctx) (partial cleanup-component false) id))
-  (cond
-    ;; source says this component should be removed, send deletion
-    ;; patch to client (unless it targets parent, like attributes)
-    ;; and close the source
-    (= val :ripley.live/tombstone)
-    (do
-      (when-not (patch/target-parent? patch)
-        (send-fn! (:channel @state)
-                  [(patch/delete id)]))
-      (p/close! source))
+  (let [update? (should-update? val)]
+    (when (and update? (= :replace patch))
+      (swap! (:state ctx) (partial cleanup-component false) id))
+    (cond
+      ;; source says this component should be removed, send deletion
+      ;; patch to client (unless it targets parent, like attributes)
+      ;; and close the source
+      (= val :ripley.live/tombstone)
+      (do
+        (when-not (patch/target-parent? patch)
+          (send-fn! (:channel @state)
+                    [(patch/delete id)]))
+        (p/close! source))
 
-    ;; Marker that this component was already removed from client
-    ;; by a parent, don't send deletion patch just close source.
-    (= val :ripley.live/tombstone-no-funeral)
-    (p/close! source)
+      ;; Marker that this component was already removed from client
+      ;; by a parent, don't send deletion patch just close source.
+      (= val :ripley.live/tombstone-no-funeral)
+      (p/close! source)
 
-    :else
-    (when (and (some? val) ;; PENDING: allow nil as value now that we are not using channels
-               (should-update? val))
-      (let [target-id (if (patch/target-parent? patch)
-                        parent
-                        id)
-            payload (try
-                      (case (patch/render-mode patch)
-                        :json (component val)
-                        :html (binding [dynamic/*live-context* ctx
-                                        *html-out* (java.io.StringWriter.)]
-                                (dynamic/with-component-id id
-                                  (component val)
-                                  (str *html-out*))))
-                      (catch Exception e
-                        (println "Component render threw exception: " e)))
-            patches [(patch/make-patch patch target-id payload)]]
-        (send-fn! (:channel @state)
-                  (if-let [[patch payload]
-                           (when did-update
-                             (did-update val))]
+      :else
+      (when (and update? (some? val)) ;; PENDING: allow nil as value now that we are not using channels
+        (let [target-id (if (patch/target-parent? patch)
+                          parent
+                          id)
+              payload (try
+                        (case (patch/render-mode patch)
+                          :json (component val)
+                          :html (binding [dynamic/*live-context* ctx
+                                          *html-out* (java.io.StringWriter.)]
+                                  (dynamic/with-component-id id
+                                    (component val)
+                                    (str *html-out*))))
+                        (catch Exception e
+                          (println "Component render threw exception: " e)))
+              patches [(patch/make-patch patch target-id payload)]]
+          (send-fn! (:channel @state)
+                    (if-let [[patch payload]
+                             (when did-update
+                               (did-update val))]
                     ;; If there is a did-update handler, send that as well
-                    (conj patches (patch/make-patch patch target-id payload))
-                    patches))))))
+                      (conj patches (patch/make-patch patch target-id payload))
+                      patches)))))))
 
 
 (defrecord DefaultLiveContext [send-fn! state]
