@@ -11,5 +11,5 @@ while ! nc -z localhost 8888; do
 done
 
 cd $GITHUB_WORKSPACE/cypress-todomvc
-npm install
+npm ci
 npx cypress run
