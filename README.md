@@ -100,6 +100,11 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 ## Changes
 
+### 2023-06-07
+- `ripley.html/compile-special` is now a multimethod and can be extended
+
 ### 2023-03-18
 - Support specifying `:should-update?` in `::h/live`
 - `use-state` now returns a third value (update-state! callback)
+
+### See commit log for older changes

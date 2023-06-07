@@ -438,21 +438,25 @@
                      ~id-sym
                      "\"></script>")))))))
 
-(def compile-special {:<> #'compile-fragment
-                      ::let #'compile-let
-                      ::for #'compile-for
-                      ::if #'compile-if
-                      ::when #'compile-when
-                      ::cond #'compile-cond
-                      ::live #'compile-live})
+(defmulti compile-special
+  "Compile a special element, that is not regular HTML vector. Dispatches on the first keyword."
+  (fn [[special-kw & _rest]] special-kw))
+
+(defmethod compile-special :<> [body] (compile-fragment body))
+(defmethod compile-special ::let [body] (compile-let body))
+(defmethod compile-special ::for [body] (compile-for body))
+(defmethod compile-special ::if [body] (compile-if body))
+(defmethod compile-special ::when [body] (compile-when body))
+(defmethod compile-special ::cond [body] (compile-cond body))
+(defmethod compile-special ::live [body] (compile-live body))
 
 (defn compile-html [body]
   (cond
     (vector? body)
     (cond
       ;; first element is special element
-      (contains? compile-special (first body))
-      ((compile-special (first body)) body)
+      (contains? (methods compile-special) (first body))
+      (compile-special body)
 
       ;; first element is a keyword this is static HTML markup
       (keyword? (first body))
