@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: actions-setup-redis
-      uses: shogo82148/actions-setup-redis@v1.9.4
+      uses: shogo82148/actions-setup-redis@v1.25.1
     - uses: actions/checkout@v2
     - name: setup clojure
       uses: DeLaGuardo/setup-clojure@master
