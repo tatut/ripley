@@ -202,6 +202,11 @@
       (swap! state-atom update :send-queue (fnil conj []) data)
       (send-fn! ch data))))
 
+(defn- empty-context? [{state :state}]
+  (let [{:keys [components callbacks]} @state]
+    (and (empty? components)
+         (empty? callbacks))))
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
@@ -221,8 +226,8 @@
              (catch Throwable t
                (println "Exception while rendering!" t))
              (finally
-               (if (empty? (:components @(:state ctx)))
-                 ;; No live components rendered, remove context immediately
+               (if (empty-context? ctx)
+                 ;; No live components  rendered or callbacks registered, remove context immediately
                  (do
                    (log/debug "No live components, remove context with id: " id)
                    (swap! current-live-contexts dissoc id))
@@ -263,7 +268,7 @@
    (fn [req]
      (when (= uri (:uri req))
        (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-             ctx (get @current-live-contexts id)]
+             {send-fn! :send-fn! :as ctx} (get @current-live-contexts id)]
          (if-not ctx
            {:status 404
             :body "No such live context"}
@@ -276,21 +281,28 @@
                (fn [_ch _status]
                  (cleanup-ctx ctx))
                :on-receive
-               (fn [_ch ^String data]
+               (fn [ch ^String data]
                  (if (= data "!")
                    (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-                   (let [idx (.indexOf data ":")
-                         id (Long/parseLong (if (pos? idx)
-                                              (subs data 0 idx)
-                                              data))
-                         args (if (pos? idx)
-                                (seq (cheshire/decode (subs data (inc idx)) keyword))
-                                nil)
+                   (let [[id args reply-id] (cheshire/decode data keyword)
                          callback (-> ctx :state deref :callbacks (get id))]
                      (if-not callback
-                       (println "Got callback with unrecognized id: " id)
-                       (dynamic/with-live-context ctx
-                         (apply callback args))))))
+                       (log/debug "Got callback with unrecognized id: " id)
+                       (try
+                         (dynamic/with-live-context ctx
+                           (let [res (apply callback args)]
+                             (when-let [reply (and reply-id (map? res) (:ripley/success res))]
+                               (server/send!
+                                ch
+                                (cheshire/encode [(patch/callback-success [reply-id reply])])))))
+                         (catch Throwable t
+                           (when-let [reply (and reply-id (:ripley/failure (ex-data t))
+                                                 (merge {:message (.getMessage t)}
+                                                        (dissoc (ex-data t) :ripley/failure)))]
+                             (server/send!
+                              ch
+                              (cheshire/encode [(patch/callback-error [reply-id reply])])))))))))
+
                :on-open
                (fn [ch]
                  (log/debug "Connected, ws? " (server/websocket? ch))

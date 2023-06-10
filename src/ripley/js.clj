@@ -4,23 +4,58 @@
             [ripley.impl.dynamic :as dyn]
             [ripley.html :as h]))
 
-(defrecord JSCallback [callback-fn condition js-params debounce-ms]
+(defn- wrap-success [fun]
+  (fn [& args]
+    {:ripley/success (apply fun args)}))
+
+(defn- wrap-failure [fun]
+  (fn [& args]
+    (try
+      (apply fun args)
+      (catch Throwable t
+        (throw (ex-info (.getMessage t)
+                        (merge (ex-data t)
+                               {:ripley/failure true})))))))
+
+;; For cases there exists a failure handler, but no success handler
+;; and the callback doesn't fail... we still need to notify client
+;; so that it removes the handler from its state.
+(defn wrap-ignore-success [fun]
+  (fn [& args]
+    (apply fun args)
+    {:ripley/success true}))
+
+(defrecord JSCallback [callback-fn condition js-params debounce-ms
+                       on-success on-failure]
   p/Callback
   (callback-js-params [_] js-params)
-  (callback-fn [_] callback-fn)
+  (callback-fn [_]
+    (cond-> callback-fn
+      on-success
+      (wrap-success)
+
+      on-failure
+      (wrap-failure)
+
+      (and on-failure (not on-success))
+      (wrap-ignore-success)))
   (callback-debounce-ms [_] debounce-ms)
-  (callback-condition [_] condition))
+  (callback-condition [_] condition)
+  (callback-on-success [_] on-success)
+  (callback-on-failure [_] on-failure))
 
 
 (defn js
   "Create a JavaScript callback that evaluates JS in browser to get parameters"
   [callback-fn & js-params]
-  (->JSCallback callback-fn nil js-params nil))
+  (map->JSCallback {:callback-fn callback-fn :js-params js-params}))
 
 (defn js-when
   "Create a conditionally fired JS callback."
   [js-condition callback-fn & js-params]
-  (->JSCallback callback-fn js-condition js-params nil))
+  (map->JSCallback {:callback-fn callback-fn
+                    :condition js-condition
+                    :js-params js-params}))
 
 
 (defn js-debounced
@@ -28,7 +63,9 @@
   changed within given ms). This is useful for input values to prevent
   sending on each keystroke, only when user stops typing."
   [debounce-ms callback-fn & js-params]
-  (->JSCallback callback-fn nil js-params debounce-ms))
+  (map->JSCallback {:callback-fn callback-fn
+                    :js-params js-params
+                    :debounce-ms debounce-ms}))
 
 (defn keycode-pressed?
   "Return JS code for checking if keypress event has given keycode"
@@ -83,3 +120,20 @@
                         identity
                         {:patch :eval-js})]
     (h/html [:script {:data-rl id}])))
+
+(defn- with [callback field value]
+  (map->JSCallback (merge (if (fn? callback)
+                            {:callback-fn callback}
+                            callback)
+                          {field value})))
+(defn on-success
+  "Add JS code that is run after the callback is processed on the server."
+  [callback on-success-js]
+  {:pre [(string? on-success-js)]}
+  (with callback :on-success on-success-js))
+
+(defn on-failure
+  "Add JS code that handles callback failure."
+  [callback on-failure-js]
+  {:pre [(string? on-failure-js)]}
+  (with callback :on-failure on-failure-js))

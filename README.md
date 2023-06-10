@@ -50,7 +50,9 @@ function is called with the value received from the source.
 ```
 
 All event handling attributes (like `:on-click` or `:on-change`) are registered as callbacks
-that are sent via the websocket to the server.
+that are sent via the websocket to the server. See `ripley.js` namespace for helpers in creating
+callbacks with more options. You can add debouncing and client side condition and success/failure
+handlers.
 
 See more details and fully working example in the examples folder.
 
@@ -99,6 +101,9 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 
 ## Changes
+
+### 2023-06-10
+- Support client side success and failure callbacks
 
 ### 2023-06-07
 - `ripley.html/compile-special` is now a multimethod and can be extended

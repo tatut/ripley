@@ -122,8 +122,9 @@
                                   (p/register-callback! dynamic/*live-context*
                                                         (p/callback-fn callback))
                                   ",[" (str/join "," (p/callback-js-params callback)) "]"
-                                  (when-let [debounce-ms (p/callback-debounce-ms callback)]
-                                    (str "," debounce-ms))
+                                  "," (or (p/callback-debounce-ms callback) "undefined")
+                                  "," (or (p/callback-on-success callback) "undefined")
+                                  "," (or (p/callback-on-failure callback) "undefined")
                                   ")")
           condition (p/callback-condition callback)]
       (if condition

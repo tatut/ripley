@@ -45,4 +45,10 @@ Returns 0-arity function that will remove the listener when called.")
   (callback-js-params [this] "Return collection JS code fragments to get parameters")
   (callback-debounce-ms [this] "Return milliseconds how much this callback invocation should be debounced for, or nil if not debounced.")
   (callback-fn [this] "Return the actual callback function to invoke.")
-  (callback-condition [this] "Return JS condition code for conditional callback invocation ornil"))
+  (callback-condition [this] "Return JS condition code for conditional callback invocation or nil")
+  (callback-on-success [this]
+    "Return JS function code to call when server callback has succeeded. The function will be called
+    with the return value of the server side function (which must be JSON serializable).")
+  (callback-on-failure [this]
+    "Return JS function code to call when server callback has failed. The function will be called
+   with the original arguments of the callback and an object describing the error."))

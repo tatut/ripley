@@ -5,29 +5,31 @@ window.ripley = {
     type: __TYPE__,
     connected: false,
     debounceTimeout: {},
+    callbackHandlers: {},
+    nextCallbackId: 0,
     get: function(id) {
         return document.querySelector("[data-rl='"+id+"']");
     },
-    send: function(id, args, debouncems) {
+    send: function(id, args, debouncems, onsuccess, onfailure) {
         if(this.debug) console.log("Sending id:", id, ", args: ", args);
         if(!this.connected) {
-            this.preOpenQueue.push({id: id, args: args});
+            this.preOpenQueue.push({id: id, args: args, onsuccess: onsuccess, onfailure: onfailure});
         } else {
             if(debouncems === undefined) {
-                this._send(id,args);
+                this._send(id,args,onsuccess,onfailure);
             } else {
                 var tid = this.debounceTimeout[id];
                 if(tid !== undefined) {
                     window.clearTimeout(tid);
                 }
                 this.debounceTimeout[id] = window.setTimeout(
-                    function() { ripley._send(id,args); },
+                    function() { ripley._send(id,args,onsuccess,onfailure); },
                     debouncems
                 );
             }
         }
     },
-    _send: function(id,args) {
+    _send: function(id,args,onsuccess,onfailure) {
         if(this.type === "sse") {
             var l = window.location;
             fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
@@ -35,8 +37,17 @@ window.ripley = {
                    headers: {"Content-Type":"application/json"},
                    body: JSON.stringify([id].concat(args))})
         } else if(this.type === "ws") {
-            let msg = id+":"+JSON.stringify(args);
-            this.connection.send(msg);
+            let cid;
+            let msg;
+            if(onsuccess !== undefined || onfailure !== undefined) {
+                cid = this.nextCallbackId;
+                this.nextCallbackId++;
+                msg = [id, args, cid];
+                this.callbackHandlers[cid] = {onsuccess: onsuccess, onfailure: onfailure};
+            } else {
+                msg = [id, args];
+            }
+            this.connection.send(JSON.stringify(msg));
         } else {
             console.err("Unknown connection type: ", this.type);
         }
@@ -47,7 +58,7 @@ window.ripley = {
         let c = this.connection;
         for(var i = 0; i<q.length; i++) {
             let cb = q[i];
-            this.send(cb.id, cb.args);
+            this.send(cb.id, cb.args, undefined, cb.onsuccess, cb.onfailure);
         }
         // clear the array
         q.length = 0;
@@ -165,8 +176,17 @@ window.ripley = {
                 target.appendChild(n);
             }
         };
+    },
+    handleResult: function(type, replyId, reply) {
+        let handlers = this.callbackHandlers[replyId];
+        if(handlers !== undefined) {
+            let handle = handlers[type];
+            if(handle !== undefined) {
+                handle(reply);
+            }
+            delete this.callbackHandlers[replyId];
+        }
     }
-
 }
 
 _rs = ripley.send.bind(ripley);
