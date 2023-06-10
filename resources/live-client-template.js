@@ -29,7 +29,7 @@ window.ripley = {
             }
         }
     },
-    _send: function(id,args) {
+    _send: function(id,args,onsuccess,onfailure) {
         if(this.type === "sse") {
             var l = window.location;
             fetch(l.protocol+"//"+l.host+this.cpath+"?id="+this.cid,
@@ -58,7 +58,7 @@ window.ripley = {
         let c = this.connection;
         for(var i = 0; i<q.length; i++) {
             let cb = q[i];
-            this.send(cb.id, cb.args);
+            this.send(cb.id, cb.args, undefined, cb.onsuccess, cb.onfailure);
         }
         // clear the array
         q.length = 0;
