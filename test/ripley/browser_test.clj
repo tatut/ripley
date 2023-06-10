@@ -85,4 +85,4 @@
 
     (is (str/blank? (w/text-content :error)))
     (w/click :do)
-    (is (.getByText @page "nope"))))
+    (is (w/wait-for (ws/text "nope")))))
