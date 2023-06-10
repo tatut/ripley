@@ -90,3 +90,20 @@
                         identity
                         {:patch :eval-js})]
     (h/html [:script {:data-rl id}])))
+
+(defn- with [callback field value]
+  (map->JSCallback (merge (if (fn? callback)
+                            {:callback-fn callback}
+                            callback)
+                          {field value})))
+(defn on-success
+  "Add JS code that is run after the callback is processed on the server."
+  [callback on-success-js]
+  {:pre [(string? on-success-js)]}
+  (with callback :on-success on-success-js))
+
+(defn on-failure
+  "Add JS code that handles callback failure."
+  [callback on-failure-js]
+  {:pre [(string? on-failure-js)]}
+  (with callback :on-failure on-failure-js))

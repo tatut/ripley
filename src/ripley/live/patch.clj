@@ -121,13 +121,13 @@ for(let i=1;i<payload.length;i++) {
   "Callback error handler."
   {:type "CE"
    :render-mode :json
-   :js-eval "ripley.handleResult('onfailure',payload[1], payload[2]);"})
+   :js-eval "ripley.handleResult('onfailure',payload[0], payload[1]);"})
 
 (define-patch-method callback-success
   "Callback success handler."
   {:type "CO"
    :render-mode :json
-   :js-eval "ripley.handleResult('onsuccess',payload[1], payload[2]);"})
+   :js-eval "ripley.handleResult('onsuccess',payload[0], payload[1]);"})
 
 (def live-client-script
   (delay

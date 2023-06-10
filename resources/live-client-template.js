@@ -40,10 +40,10 @@ window.ripley = {
             let cid;
             let msg;
             if(onsuccess !== undefined || onfailure !== undefined) {
-                cid = nextCallbackId;
-                nextCallbackId++;
-                msg = [id, args, cid];
-                callbackHandlers[cid] = {onsuccess: onsuccess, onfailure: onfailure};
+                cid = this.nextCallbackId;
+                this.nextCallbackId++;
+                msg = [id, args, cid, onsuccess !== undefined ? 1 : 0, onfailure !== undefined ? 1 : 0];
+                this.callbackHandlers[cid] = {onsuccess: onsuccess, onfailure: onfailure};
             } else {
                 msg = [id, args];
             }
@@ -178,14 +178,14 @@ window.ripley = {
         };
     },
     handleResult: function(type, replyId, reply) {
-        let handlers = callbackHandlers[replyId];
+        let handlers = this.callbackHandlers[replyId];
         if(handlers !== undefined) {
             let handle = handlers[type];
             if(handle !== undefined) {
                 handle(reply);
             }
         }
-        delete callbackHandlers[replyId];
+        delete this.callbackHandlers[replyId];
     }
 }
 
