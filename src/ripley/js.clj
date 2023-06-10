@@ -4,11 +4,41 @@
             [ripley.impl.dynamic :as dyn]
             [ripley.html :as h]))
 
+(defn- wrap-success [fun]
+  (fn [& args]
+    {:ripley/success (apply fun args)}))
+
+(defn- wrap-failure [fun]
+  (fn [& args]
+    (try
+      (apply fun args)
+      (catch Throwable t
+        (throw (ex-info (.getMessage t)
+                        (merge (ex-data t)
+                               {:ripley/failure true})))))))
+
+;; For cases there exists a failure handler, but no success handler
+;; and the callback doesn't fail... we still need to notify client
+;; so that it removes the handler from its state.
+(defn wrap-ignore-success [fun]
+  (fn [& args]
+    (apply fun args)
+    {:ripley/success true}))
+
 (defrecord JSCallback [callback-fn condition js-params debounce-ms
                        on-success on-failure]
   p/Callback
   (callback-js-params [_] js-params)
-  (callback-fn [_] callback-fn)
+  (callback-fn [_]
+    (cond-> callback-fn
+      on-success
+      (wrap-success)
+
+      on-failure
+      (wrap-failure)
+
+      (and on-failure (not on-success))
+      (wrap-ignore-success)))
   (callback-debounce-ms [_] debounce-ms)
   (callback-condition [_] condition)
   (callback-on-success [_] on-success)

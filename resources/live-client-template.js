@@ -42,7 +42,7 @@ window.ripley = {
             if(onsuccess !== undefined || onfailure !== undefined) {
                 cid = this.nextCallbackId;
                 this.nextCallbackId++;
-                msg = [id, args, cid, onsuccess !== undefined ? 1 : 0, onfailure !== undefined ? 1 : 0];
+                msg = [id, args, cid];
                 this.callbackHandlers[cid] = {onsuccess: onsuccess, onfailure: onfailure};
             } else {
                 msg = [id, args];
@@ -184,8 +184,8 @@ window.ripley = {
             if(handle !== undefined) {
                 handle(reply);
             }
+            delete this.callbackHandlers[replyId];
         }
-        delete this.callbackHandlers[replyId];
     }
 }
 

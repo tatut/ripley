@@ -284,19 +284,24 @@
                (fn [ch ^String data]
                  (if (= data "!")
                    (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-                   (let [[id args reply-id success-handler failure-handler] (cheshire/decode data keyword)
+                   (let [[id args reply-id] (cheshire/decode data keyword)
                          callback (-> ctx :state deref :callbacks (get id))]
                      (if-not callback
                        (log/debug "Got callback with unrecognized id: " id)
                        (try
                          (dynamic/with-live-context ctx
                            (let [res (apply callback args)]
-                             (when (and reply-id (= 1 success-handler))
-                               (server/send! ch (cheshire/encode [(patch/callback-success [reply-id res])])))))
+                             (when-let [reply (and reply-id (map? res) (:ripley/success res))]
+                               (server/send!
+                                ch
+                                (cheshire/encode [(patch/callback-success [reply-id reply])])))))
                          (catch Throwable t
-                           (when (and reply-id (= 1 failure-handler))
-                             (server/send! ch (cheshire/encode [(patch/callback-error [reply-id (merge {:message (.getMessage t)}
-                                                                                                       (ex-data t))])])))))))))
+                           (when-let [reply (and reply-id (:ripley/failure (ex-data t))
+                                                 (merge {:message (.getMessage t)}
+                                                        (dissoc (ex-data t) :ripley/failure)))]
+                             (server/send!
+                              ch
+                              (cheshire/encode [(patch/callback-error [reply-id reply])])))))))))
 
                :on-open
                (fn [ch]
