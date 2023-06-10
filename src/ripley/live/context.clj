@@ -202,6 +202,11 @@
       (swap! state-atom update :send-queue (fnil conj []) data)
       (send-fn! ch data))))
 
+(defn- empty-context? [{state :state}]
+  (let [{:keys [components callbacks]} @state]
+    (and (empty? components)
+         (empty? callbacks))))
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   [render-fn]
@@ -221,8 +226,8 @@
              (catch Throwable t
                (println "Exception while rendering!" t))
              (finally
-               (if (empty? (:components @(:state ctx)))
-                 ;; No live components rendered, remove context immediately
+               (if (empty-context? ctx)
+                 ;; No live components  rendered or callbacks registered, remove context immediately
                  (do
                    (log/debug "No live components, remove context with id: " id)
                    (swap! current-live-contexts dissoc id))
