@@ -24,7 +24,7 @@
   "Create a conditionally fired JS callback."
   [js-condition callback-fn & js-params]
   (map->JSCallback {:callback-fn callback-fn
-                    :js-condition js-condition
+                    :condition js-condition
                     :js-params js-params}))
 
 

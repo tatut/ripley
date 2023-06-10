@@ -121,10 +121,8 @@
     (let [invoke-callback-js (str "_rs("
                                   (p/register-callback! dynamic/*live-context*
                                                         (p/callback-fn callback))
-                                  ",[" (str/join "," (p/callback-js-params callback)) "],"
-                                  (if-let [debounce-ms (p/callback-debounce-ms callback)]
-                                    (str debounce-ms)
-                                    "undefined")
+                                  ",[" (str/join "," (p/callback-js-params callback)) "]"
+                                  "," (or (p/callback-debounce-ms callback) "undefined")
                                   "," (or (p/callback-on-success callback) "undefined")
                                   "," (or (p/callback-on-failure callback) "undefined")
                                   ")")
