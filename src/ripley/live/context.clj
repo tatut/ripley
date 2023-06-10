@@ -263,7 +263,7 @@
    (fn [req]
      (when (= uri (:uri req))
        (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-             ctx (get @current-live-contexts id)]
+             {send-fn! :send-fn! :as ctx} (get @current-live-contexts id)]
          (if-not ctx
            {:status 404
             :body "No such live context"}
@@ -276,21 +276,23 @@
                (fn [_ch _status]
                  (cleanup-ctx ctx))
                :on-receive
-               (fn [_ch ^String data]
+               (fn [ch ^String data]
                  (if (= data "!")
                    (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-                   (let [idx (.indexOf data ":")
-                         id (Long/parseLong (if (pos? idx)
-                                              (subs data 0 idx)
-                                              data))
-                         args (if (pos? idx)
-                                (seq (cheshire/decode (subs data (inc idx)) keyword))
-                                nil)
+                   (let [[id args reply-id success-handler? failure-handler?] (cheshire/decode data keyword)
                          callback (-> ctx :state deref :callbacks (get id))]
                      (if-not callback
-                       (println "Got callback with unrecognized id: " id)
-                       (dynamic/with-live-context ctx
-                         (apply callback args))))))
+                       (log/debug "Got callback with unrecognized id: " id)
+                       (try
+                         (dynamic/with-live-context ctx
+                           (let [res (apply callback args)]
+                             (when (and reply-id success-handler?)
+                               (send-fn! [(patch/callback-success [reply-id res])]))))
+                         (catch Throwable t
+                           (when (and reply-id failure-handler?)
+                             (send-fn! [(patch/callback-error [reply-id (merge {:message (.getMessage t)}
+                                                                               (ex-data t))])]))))))))
+
                :on-open
                (fn [ch]
                  (log/debug "Connected, ws? " (server/websocket? ch))

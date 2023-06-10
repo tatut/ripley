@@ -117,6 +117,18 @@ for(let i=1;i<payload.length;i++) {
    :render-mode :json
    :js-eval "ripley.T(elt,payload);"})
 
+(define-patch-method callback-error
+  "Callback error handler."
+  {:type "CE"
+   :render-mode :json
+   :js-eval "ripley.handleResult('onfailure',payload[1], payload[2]);"})
+
+(define-patch-method callback-success
+  "Callback success handler."
+  {:type "CO"
+   :render-mode :json
+   :js-eval "ripley.handleResult('onsuccess',payload[1], payload[2]);"})
+
 (def live-client-script
   (delay
     (-> "live-client-template.js" io/resource slurp

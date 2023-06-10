@@ -5,23 +5,25 @@ window.ripley = {
     type: __TYPE__,
     connected: false,
     debounceTimeout: {},
+    callbackHandlers: {},
+    nextCallbackId: 0,
     get: function(id) {
         return document.querySelector("[data-rl='"+id+"']");
     },
-    send: function(id, args, debouncems) {
+    send: function(id, args, debouncems, onsuccess, onfailure) {
         if(this.debug) console.log("Sending id:", id, ", args: ", args);
         if(!this.connected) {
-            this.preOpenQueue.push({id: id, args: args});
+            this.preOpenQueue.push({id: id, args: args, onsuccess: onsuccess, onfailure: onfailure});
         } else {
             if(debouncems === undefined) {
-                this._send(id,args);
+                this._send(id,args,onsuccess,onfailure);
             } else {
                 var tid = this.debounceTimeout[id];
                 if(tid !== undefined) {
                     window.clearTimeout(tid);
                 }
                 this.debounceTimeout[id] = window.setTimeout(
-                    function() { ripley._send(id,args); },
+                    function() { ripley._send(id,args,onsuccess,onfailure); },
                     debouncems
                 );
             }
@@ -35,8 +37,17 @@ window.ripley = {
                    headers: {"Content-Type":"application/json"},
                    body: JSON.stringify([id].concat(args))})
         } else if(this.type === "ws") {
-            let msg = id+":"+JSON.stringify(args);
-            this.connection.send(msg);
+            let cid;
+            let msg;
+            if(onsuccess !== undefined || onfailure !== undefined) {
+                cid = nextCallbackId;
+                nextCallbackId++;
+                msg = [id, args, cid];
+                callbackHandlers[cid] = {onsuccess: onsuccess, onfailure: onfailure};
+            } else {
+                msg = [id, args];
+            }
+            this.connection.send(JSON.stringify(msg));
         } else {
             console.err("Unknown connection type: ", this.type);
         }
@@ -165,8 +176,17 @@ window.ripley = {
                 target.appendChild(n);
             }
         };
+    },
+    handleResult: function(type, replyId, reply) {
+        let handlers = callbackHandlers[replyId];
+        if(handlers !== undefined) {
+            let handle = handlers[type];
+            if(handle !== undefined) {
+                handle(reply);
+            }
+        }
+        delete callbackHandlers[replyId];
     }
-
 }
 
 _rs = ripley.send.bind(ripley);

@@ -4,23 +4,28 @@
             [ripley.impl.dynamic :as dyn]
             [ripley.html :as h]))
 
-(defrecord JSCallback [callback-fn condition js-params debounce-ms]
+(defrecord JSCallback [callback-fn condition js-params debounce-ms
+                       on-success on-failure]
   p/Callback
   (callback-js-params [_] js-params)
   (callback-fn [_] callback-fn)
   (callback-debounce-ms [_] debounce-ms)
-  (callback-condition [_] condition))
+  (callback-condition [_] condition)
+  (callback-on-success [_] on-success)
+  (callback-on-failure [_] on-failure))
 
 
 (defn js
   "Create a JavaScript callback that evaluates JS in browser to get parameters"
   [callback-fn & js-params]
-  (->JSCallback callback-fn nil js-params nil))
+  (map->JSCallback {:callback-fn callback-fn :js-params js-params}))
 
 (defn js-when
   "Create a conditionally fired JS callback."
   [js-condition callback-fn & js-params]
-  (->JSCallback callback-fn js-condition js-params nil))
+  (map->JSCallback {:callback-fn callback-fn
+                    :js-condition js-condition
+                    :js-params js-params}))
 
 
 (defn js-debounced
@@ -28,7 +33,9 @@
   changed within given ms). This is useful for input values to prevent
   sending on each keystroke, only when user stops typing."
   [debounce-ms callback-fn & js-params]
-  (->JSCallback callback-fn nil js-params debounce-ms))
+  (map->JSCallback {:callback-fn callback-fn
+                    :js-params js-params
+                    :debounce-ms debounce-ms}))
 
 (defn keycode-pressed?
   "Return JS code for checking if keypress event has given keycode"
