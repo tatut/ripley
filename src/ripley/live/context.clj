@@ -65,7 +65,7 @@
       (p/close! source)
 
       :else
-      (when (and update? (some? val)) ;; PENDING: allow nil as value now that we are not using channels
+      (when update?
         (let [target-id (if (patch/target-parent? patch)
                           parent
                           id)

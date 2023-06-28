@@ -396,6 +396,15 @@
   `(let ~bindings
      ~(compile-html body)))
 
+(defn wrap-placeholder [component-fn]
+  (fn [value]
+    (if (some? value)
+      (component-fn value)
+      (let [id (dynamic/consume-component-id!)]
+        (out! "<script type=\"ripley/placeholder\" data-rl=\""
+              id
+              "\"></script>")))))
+
 (defn compile-live
   "Compile special :ripley.html/live element."
   [live-element]
@@ -413,7 +422,7 @@
            ~comp-sym ~(or component
                           `(fn [thing#]
                              (out! (str thing#))))
-           ~id-sym (p/register! dynamic/*live-context* ~source-sym ~comp-sym
+           ~id-sym (p/register! dynamic/*live-context* ~source-sym (wrap-placeholder ~comp-sym)
                                 ~(merge
                                   {}
                                   (when patch
