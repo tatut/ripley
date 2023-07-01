@@ -2,7 +2,8 @@
   "JavaScript helpers"
   (:require [ripley.live.protocols :as p]
             [ripley.impl.dynamic :as dyn]
-            [ripley.html :as h]))
+            [ripley.html :as h]
+            [clojure.string :as str]))
 
 (defn- wrap-success [fun]
   (fn [& args]
@@ -137,3 +138,47 @@
   [callback on-failure-js]
   {:pre [(string? on-failure-js)]}
   (with callback :on-failure on-failure-js))
+
+(defn export-callbacks
+  "Output a JS script tag that exposes the given callbacks as global
+  JS functions or inside a global object.
+
+  Names must be keywords denoting valid JS function names.
+
+  eg. `(export-callbacks {:foo #(println \"Hello\" %)})`
+  will create a JS function called `foo` that takes 1 argument
+  and invokes the server side callback with it.
+  "
+  ([js-name->callback] (export-callbacks nil js-name->callback))
+  ([object-name js-name->callback]
+   (h/out! "<script>\n")
+   (when object-name
+     (h/out! (name object-name) "={"))
+   (doall
+    (map-indexed
+     (fn [i [js-name callback]]
+
+       (let [fn-name (name js-name)
+             callback-fn (cond
+                           (fn? callback) callback
+                           (satisfies? p/Callback callback)
+                           (p/callback-fn callback)
+
+                           :else (throw (ex-info "Must be function or Callback record"
+                                                 {:unexpected-callback callback})))
+             argc (-> callback-fn class .getDeclaredMethods first .getParameterTypes alength)
+             args (map #(str (char (+ 97 %))) (range argc))
+
+             cb (if (fn? callback)
+                  (apply js callback args)
+                  (assoc callback :js-params args))]
+         (if object-name
+           (h/out! (when (pos? i) ",") "\n"
+                   fn-name ": function(" (str/join "," args) "){"
+                   (h/register-callback cb)
+                   "}")
+           (h/out! "function " fn-name "(" (str/join "," args) "){"
+                   (h/register-callback cb)
+                   "}\n"))))
+     js-name->callback))
+   (h/out! (when object-name "}") "</script>")))
