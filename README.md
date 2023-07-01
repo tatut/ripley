@@ -104,6 +104,7 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 ### 2023-07-01
 - Added `ripley.js/export-callbacks` to conveniently expose server functions as JS functions
+- Added `static` utility to use a static value as a source
 
 ### 2023-06-28
 - Source value can be `nil` now and component is replaced with placeholder

@@ -278,3 +278,14 @@
 
 (defmethod to-source promise-type [p]
   (future-source p))
+
+(defn static
+  "Source that does not change. It just holds the given data."
+  [data]
+  (reify p/Source
+    (current-value [_] data)
+    (listen! [_ listener]
+      (listener data)
+      (constantly nil))
+    (close! [_]
+      nil)))
