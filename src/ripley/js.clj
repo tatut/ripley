@@ -5,18 +5,39 @@
             [ripley.html :as h]
             [clojure.string :as str]))
 
+(defn- arity [f]
+  (-> f class .getDeclaredMethods first .getParameterTypes alength))
+
 (defn- wrap-success [fun]
-  (fn [& args]
-    {:ripley/success (apply fun args)}))
+  (case (arity fun)
+    1 (fn [a] {:ripley/success (fun a)})
+    2 (fn [a b] {:ripley/success (fun a b)})
+    3 (fn [a b c] {:ripley/success (fun a b c)})
+    4 (fn [a b c d] {:ripley/success (fun a b c d)})
+    5 (fn [a b c d e] {:ripley/success (fun a b c d e)})
+    6 (fn [a b c d e f] {:ripley/success (fun a b c d e f)})
+    7 (fn [a b c d e f g] {:ripley/success (fun a b c d e f g)})
+    (fn [& args]
+      {:ripley/success (apply fun args)})))
+
+(defn- wrap-failure-call [fun args]
+  (try
+    (apply fun args)
+    (catch Throwable t
+      (throw (ex-info (.getMessage t)
+                      (merge (ex-data t)
+                             {:ripley/failure true}))))))
 
 (defn- wrap-failure [fun]
-  (fn [& args]
-    (try
-      (apply fun args)
-      (catch Throwable t
-        (throw (ex-info (.getMessage t)
-                        (merge (ex-data t)
-                               {:ripley/failure true})))))))
+  (case (arity fun)
+    1 (fn [a] (wrap-failure-call fun [a]))
+    2 (fn [a b] (wrap-failure-call fun [a b]))
+    3 (fn [a b c] (wrap-failure-call fun [a b c]))
+    4 (fn [a b c d] (wrap-failure-call fun [a b c d]))
+    5 (fn [a b c d e] (wrap-failure-call fun [a b c d e]))
+    6 (fn [a b c d e f] (wrap-failure-call fun [a b c d e f]))
+    7 (fn [a b c d e f g] (wrap-failure-call fun [a b c d e f g]))
+    (fn [& args] (wrap-failure-call fun args))))
 
 ;; For cases there exists a failure handler, but no success handler
 ;; and the callback doesn't fail... we still need to notify client
@@ -166,7 +187,7 @@
 
                            :else (throw (ex-info "Must be function or Callback record"
                                                  {:unexpected-callback callback})))
-             argc (-> callback-fn class .getDeclaredMethods first .getParameterTypes alength)
+             argc (arity callback-fn)
              args (map #(str (char (+ 97 %))) (range argc))
 
              cb (if (fn? callback)
