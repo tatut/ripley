@@ -56,7 +56,7 @@
 (define-patch-method prepend
   "Prepend HTML to the start of element."
   {:type "P"
-   :js-eval "elt.innerHTML = payload + elt.innerHTML;"})
+   :js-eval "ripley.P(elt,payload);"})
 
 (define-patch-method delete
   "Delete element."

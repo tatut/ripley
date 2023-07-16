@@ -136,7 +136,14 @@ window.ripley = {
             disconnected();
         }
     },
-
+    runNewScripts: function(elt) {
+        elt.querySelectorAll("script").forEach( (script) => {
+            if(script.getAttribute("data-rl-run") === null) {
+                eval(script.text+"");
+                script.setAttribute("data-rl-run", "1");
+            }
+        });
+    },
     // helper for R patch method to work around SVG issues
     // PENDING: need similar fix for appends? try to generalize
     R: function(elt, withContent) {
@@ -160,13 +167,15 @@ window.ripley = {
             })
         }
     },
+    P: function(elt, withContent) {
+        elt.innerHTML = withContent+elt.innerHTML;
+        ripley.runNewScripts(elt.parentElement);
+    },
     F: function(elt, withContent) {
         let newElt = document.createElement("script");
         elt.insertAdjacentElement("afterend", newElt);
         newElt.outerHTML = withContent;
-        newElt.querySelectorAll("script").forEach( (script) => {
-            eval(script.text+"")
-        })
+        ripley.runNewScripts(elt.parentElement);
     },
     T: function(templateElt, data) {
         let target = document.querySelector(data[0]);
