@@ -160,6 +160,14 @@ window.ripley = {
             })
         }
     },
+    F: function(elt, withContent) {
+        let newElt = document.createElement("script");
+        elt.insertAdjacentElement("afterend", newElt);
+        newElt.outerHTML = withContent;
+        newElt.querySelectorAll("script").forEach( (script) => {
+            eval(script.text+"")
+        })
+    },
     T: function(templateElt, data) {
         let target = document.querySelector(data[0]);
         target.textContent="";

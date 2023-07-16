@@ -71,7 +71,7 @@
 (define-patch-method insert-after
   "Insert HTML after the end of component."
   {:type "F"
-   :js-eval "elt.insertAdjacentHTML(\"afterend\",payload);"})
+   :js-eval "ripley.F(elt,payload);"})
 
 (define-patch-method move-after
   "Move existing live component after the end of component."
