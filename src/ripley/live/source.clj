@@ -27,9 +27,9 @@
     x
     (to-source x)))
 
-(defrecord ComputedSource [f initial-value unlisten-sources input-values listeners]
+(defrecord ComputedSource [f initial-value unlisten-sources state listeners]
   p/Source
-  (current-value [_] (apply f @input-values))
+  (current-value [_] (:value @state))
   (listen! [this listener]
     ;; Call listener immediately with the value, if the value
     ;; is different from the initial value
@@ -69,13 +69,19 @@
   one changes."
   [f & sources]
   (let [sources (mapv source sources)
-        input-values (atom (mapv p/current-value sources))
+        initial-input-values (mapv p/current-value sources)
+        initial-value (apply f initial-input-values)
+        state (atom {:input-values initial-input-values
+                     :value initial-value})
         listeners (atom #{})
-        initial-value (apply f @input-values)
         update! (fn [i value]
-                  (let [old-value (apply f @input-values)
-                        new-input-values (swap! input-values assoc i value)
-                        new-value (apply f new-input-values)]
+                  (let [old-value (:value @state)
+                        {new-value :value} (swap! state
+                                                  (fn [{:keys [input-values]}]
+                                                    (let [new-input-values (assoc input-values i value)
+                                                          new-value (apply f new-input-values)]
+                                                      {:input-values new-input-values
+                                                       :value new-value})))]
                     (when (not= old-value new-value)
                       (doseq [listener @listeners]
                         (listener new-value)))))]
@@ -88,7 +94,7 @@
       (map-indexed (fn [i s]
                      (p/listen! s (partial update! i)))
                    sources))
-     input-values
+     state
      listeners)))
 
 (defmacro c=

@@ -102,6 +102,9 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 ## Changes
 
+### 2023-08-04
+- Fix computed source when calculation fn is not pure (eg. uses current time)
+
 ### 2023-07-01
 - Added `ripley.js/export-callbacks` to conveniently expose server functions as JS functions
 - Added `static` utility to use a static value as a source
