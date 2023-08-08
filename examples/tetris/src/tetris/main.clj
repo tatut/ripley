@@ -107,4 +107,4 @@
             (server/run-server tetris-routes {:port port})))))
 
 (defn -main []
-  (swap! server ()))
+  (restart))
