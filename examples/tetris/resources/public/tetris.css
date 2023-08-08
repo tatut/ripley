@@ -1,0 +1,10 @@
+rect.e { fill: gray; }
+rect.f { fill: red; stroke-width: 1; stroke: black; }
+
+.tetris-container { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.tetris { width: 200px; position: relative; left: -100px; top: -200px; }
+.game-over { position: fixed; top: 50%; }
+
+.score {
+    font-weight: 900;
+}
