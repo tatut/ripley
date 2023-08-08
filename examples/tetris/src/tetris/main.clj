@@ -55,18 +55,36 @@
            (fn [score]
              (h/html
               [:span score]))]]
-         [:svg {:width (* 20 w)
-                :height (* 20 h)}
-          [::h/for [y (range h)]
-           [::h/live
-            (source/computed #(nth (state/board-with-piece %) y) gs)
-            (fn [row]
-              (h/html
-               [:g.row
-                [::h/for [x (range w)
-                          :let [filled? (= 1 (nth row x))]]
-                 [:rect {:x (* 20 x) :y (* 20 y) :width 20 :height 20
-                         :class (if filled? "f" "e")}]]]))]]]
+         [:div.board-and-next
+          [:svg.board {:width (* 20 w)
+                       :height (* 20 h)}
+           [::h/for [y (range h)]
+            [::h/live
+             (source/computed #(nth (state/board-with-piece %) y) gs)
+             (fn [row]
+               (h/html
+                [:g.row
+                 [::h/for [x (range w)
+                           :let [filled? (= 1 (nth row x))]]
+                  [:rect {:x (* 20 x) :y (* 20 y) :width 20 :height 20
+                          :class (if filled? "f" "e")}]]]))]]]
+
+          ;; Next piece display
+          [:div.next
+           [:div "Next:"]
+           [:svg {:width (* 20 4) :height (* 20 4)}
+            [::h/live (source/computed :next-piece gs)
+             (fn [rows]
+               (h/html
+                [:g
+                 [::h/for [r (range (count rows))
+                           :let [row (nth rows r)]]
+                  [::h/for [c (range (count row))
+                            :let [p (nth row c)]]
+                   [:rect {:x (* c 20) :y (* r 20) :width 20 :height 20
+                           :class (if (= 1 p) "f" "e")}]]]]))]]]]
+
+         ;; Game over dialog
          [::h/live (source/computed :game-over? gs)
           #(h/html
             [:dialog.game-over {:open %} "Game over"])]]]]])))
