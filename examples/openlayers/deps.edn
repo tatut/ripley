@@ -1,0 +1,5 @@
+{:paths ["src" "../../resources" "resources"]
+ :deps {ripley {:local/root "../.."}
+        compojure {:mvn/version "1.6.1"}
+        org.clojure/data.csv {:mvn/version "1.0.1"}}
+ :aliases {:run {:main-opts ["-m" "openlayers.main"]}}}
