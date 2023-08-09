@@ -59,6 +59,7 @@
        [::h/for [f ["ol-map.js" "ol-layer-openstreetmap.js" "ol-layer-vector.js" "ol-marker-icon.js"]]
         [:script {:src (str "https://unpkg.com/@openlayers-elements/bundle/dist/" f) :type :module}]]
        (h/live-client-script "/_ws")
+       ;; Export a callback to be available on the JS side, see below
        (js/export-callbacks
         {:set_extent set-extent!})]
       [:body
@@ -67,11 +68,15 @@
         [:ol-map {:style "width: 100%; height: 90vh;"
                   :projection "EPSG:4326"
                   :zoom "9" :lat "65.0" :lon "24.73"}
+         ;; Ripley doesn't have any special support for custom events (yet), but
+         ;; we can add it with this simple script.
+         ;; This adds a view-change handler that calls our exported callback.
          [:script
           "let m = document.querySelector('ol-map'); "
           "m.addEventListener('view-change', _=> set_extent(m.map.getView().calculateExtent()))"]
          [:ol-layer-openstreetmap]
 
+         ;; Render a vector layer with each marker as an element, like any Ripley collection
          (collection/live-collection
           {:source (source/computed (fn [db extent]
                                       (find-stops db extent)) db extent)
