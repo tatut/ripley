@@ -1,5 +1,13 @@
 rect.e { fill: gray; }
-rect.f { fill: red; stroke-width: 1; stroke: black; }
+rect.r { fill: red; stroke-width: 1; stroke: black; }
+rect.g { fill: green; stroke-width: 1; stroke: black; }
+rect.b { fill: blue; stroke-width: 1; stroke: black; }
+rect.y { fill: yellow; stroke-width: 1; stroke: black; }
+rect.o { fill: orange; stroke-width: 1; stroke: black; }
+rect.m { fill: magenta; stroke-width: 1; stroke: black; }
+rect.c { fill: cyan; stroke-width: 1; stroke: black; }
+
+
 
 .tetris-container { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 .tetris { width: 200px; position: relative; left: -100px; top: -200px; }

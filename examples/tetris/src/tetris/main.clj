@@ -65,9 +65,9 @@
                (h/html
                 [:g.row
                  [::h/for [x (range w)
-                           :let [filled? (= 1 (nth row x))]]
+                           :let [empty? (= 0 (nth row x))]]
                   [:rect {:x (* 20 x) :y (* 20 y) :width 20 :height 20
-                          :class (if filled? "f" "e")}]]]))]]]
+                          :class (if empty? "e" (nth row x))}]]]))]]]
 
           ;; Next piece display
           [:div.next
@@ -82,7 +82,7 @@
                   [::h/for [c (range (count row))
                             :let [p (nth row c)]]
                    [:rect {:x (* c 20) :y (* r 20) :width 20 :height 20
-                           :class (if (= 1 p) "f" "e")}]]]]))]]]]
+                           :class (if (= 0 p) "e" p)}]]]]))]]]]
 
          ;; Game over dialog
          [::h/live (source/computed :game-over? gs)

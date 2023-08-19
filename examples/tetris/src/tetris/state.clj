@@ -26,6 +26,7 @@
              [[1 1 1]
               [0 1 0]]])
 
+(def colors "rgbyomc")
 (def board-size {:width 10 :height 20})
 
 (defn rotate [rows]
@@ -36,8 +37,17 @@
             (for [c (range col-count)]
               (get-in rows [(- col-count c 1) r])))))))
 
+(defn random-color! []
+  (rand-nth colors))
+
 (defn random-piece! []
-  (rand-nth pieces))
+  (let [c (random-color!)]
+    (mapv (fn [row]
+            (mapv #(if (= 1 %) c %)
+                  row))
+          (rand-nth pieces))))
+
+
 
 (comment
   ;; Test every piece rotates correctly
@@ -67,9 +77,9 @@
                   (every? (fn [col-idx]
                             (let [board-x (+ x col-idx)
                                   col (nth row col-idx)]
-                              (or (zero? col)
+                              (or (= 0 col)
                                   (and (< board-x w)
-                                       (zero? (get-in b [board-y board-x]))))))
+                                       (= 0 (get-in b [board-y board-x]))))))
                           (range (count row))))))
             (range (count piece)))))
 
@@ -79,9 +89,10 @@
   (update state :board
           (fn [b]
             (reduce (fn [b [xp yp]]
-                      (if (zero? (get-in piece [yp xp]))
-                        b
-                        (assoc-in b [(+ y yp) (+ x xp)] 1)))
+                      (let [at (get-in piece [yp xp])]
+                        (if (= 0 at)
+                          b
+                          (assoc-in b [(+ y yp) (+ x xp)] at))))
                     b
                     (for [x (range (count (first piece)))
                           y (range (count piece))]
@@ -147,7 +158,7 @@
   (let [h (height state)
         w (width state)
         lines (remove (fn [row]
-                        (every? #(= 1 %) row))
+                        (every? #(not= % 0) row))
                       b)
         cleared-lines (- h (count lines))
         score (if (pos? cleared-lines)
