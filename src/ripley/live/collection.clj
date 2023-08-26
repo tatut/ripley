@@ -74,7 +74,7 @@
 
            ;; Cleanup components that were removed
            (swap! components-by-key #(reduce dissoc % removed-keys))
-           (doseq [{id :component-id} removed-components]
+           (doseq [[_ {id :component-id}] removed-components]
              (p/deregister! ctx id))
 
            ;; Set child order for existing children (if changed)

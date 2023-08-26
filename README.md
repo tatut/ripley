@@ -102,6 +102,9 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 ## Changes
 
+### 2024-08-26
+- Fix bug in live collection cleanup not being called
+
 ### 2023-08-04
 - Fix computed source when calculation fn is not pure (eg. uses current time)
 
