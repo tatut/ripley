@@ -267,64 +267,73 @@
   (params/wrap-params
    (fn [req]
      (when (= uri (:uri req))
-       (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-             {send-fn! :send-fn! :as ctx} (get @current-live-contexts id)]
-         (if-not ctx
+       (let [id  (-> req :query-params (get "id") java.util.UUID/fromString)
+             ctx (get @current-live-contexts id)]
+         (cond
+           (not ctx)
            {:status 404
-            :body "No such live context"}
-           (if (= :post (:request-method req))
-             (post-callback ctx (:body req))
-             ;; Serve events as WebSocket or SSE
-             (server/as-channel
-              req
-              {:on-close
-               (fn [_ch _status]
-                 (cleanup-ctx ctx))
-               :on-receive
-               (fn [ch ^String data]
-                 (if (= data "!")
-                   (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-                   (let [[id args reply-id] (cheshire/decode data keyword)
-                         callback (-> ctx :state deref :callbacks (get id))]
-                     (if-not callback
-                       (log/debug "Got callback with unrecognized id: " id)
-                       (try
-                         (dynamic/with-live-context ctx
-                           (let [res (apply callback args)]
-                             (when-let [reply (and reply-id (map? res) (:ripley/success res))]
-                               (server/send!
+            :body   "No such live context"}
+
+           (= :post (:request-method req))
+           (post-callback ctx (:body req))
+
+           :else
+           ;; Serve events as WebSocket or SSE
+           (server/as-channel
+             req
+             {:on-close
+              (fn [_ch _status]
+                (cleanup-ctx ctx))
+              :on-receive
+              (fn [ch ^String data]
+                (if (= data "!")
+                  (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
+                  (let [[id args reply-id] (cheshire/decode data keyword)
+                        callback           (-> ctx :state deref :callbacks (get id))]
+                    (if-not callback
+                      (log/debug "Got callback with unrecognized id: " id)
+                      (try
+                        (dynamic/with-live-context ctx
+                          (let [res (apply callback args)]
+                            (when-let [reply (and reply-id
+                                                  (map? res)
+                                                  (:ripley/success res))]
+                              (server/send!
                                 ch
                                 (cheshire/encode [(patch/callback-success [reply-id reply])])))))
-                         (catch Throwable t
-                           (when-let [reply (and reply-id (:ripley/failure (ex-data t))
-                                                 (merge {:message (.getMessage t)}
-                                                        (dissoc (ex-data t) :ripley/failure)))]
-                             (server/send!
+                        (catch Throwable t
+                          (log/error t)
+                          (when-let [reply (and reply-id
+                                                (:ripley/failure (ex-data t))
+                                                (-> (ex-data t)
+                                                    (dissoc :ripley/failure)
+                                                    (assoc :message (.getMessage t))))]
+                            (server/send!
                               ch
                               (cheshire/encode [(patch/callback-error [reply-id reply])])))))))))
 
-               :on-open
-               (fn [ch]
-                 (log/debug "Connected, ws? " (server/websocket? ch))
-                 ;; If connection is not WebSocket, initialize SSE headers
-                 (when-not (server/websocket? ch)
-                   (server/send! ch {:status 200
-                                     :headers {"Content-Type" "text/event-stream"}}
-                                 false))
+              :on-open
+              (fn [ch]
+                (log/debug "Connected, ws? " (server/websocket? ch))
+                ;; If connection is not WebSocket, initialize SSE headers
+                (when-not (server/websocket? ch)
+                  (server/send! ch {:status  200
+                                    :headers {"Content-Type" "text/event-stream"}}
+                    false))
 
-                 ;; Send any items in the send queue
-                 (doseq [queued-data (:send-queue @(:state ctx))]
-                   (default-send-fn! ch queued-data))
+                ;; Send any items in the send queue
+                (doseq [queued-data (:send-queue @(:state ctx))]
+                  (default-send-fn! ch queued-data))
 
-                 ;; Close the wait-ch so the registered live component
-                 ;; go-blocks will start running
-                 ;; TODO: We shouldn't need this anymore
-                 (async/close! (:wait-ch @(:state ctx)))
-                 (swap! (:state ctx)
-                        #(-> %
-                             (dissoc :send-queue :wait-ch)
-                             (assoc
-                              :channel ch
-                              :ping-task (when ping-interval
-                                           (schedule-ping ch ping-interval))
-                              :status :connected))))}))))))))
+                ;; Close the wait-ch so the registered live component
+                ;; go-blocks will start running
+                ;; TODO: We shouldn't need this anymore
+                (async/close! (:wait-ch @(:state ctx)))
+                (swap! (:state ctx)
+                  #(-> %
+                       (dissoc :send-queue :wait-ch)
+                       (assoc
+                         :channel ch
+                         :ping-task (when ping-interval
+                                      (schedule-ping ch ping-interval))
+                         :status :connected))))})))))))
