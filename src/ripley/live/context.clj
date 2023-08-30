@@ -77,8 +77,10 @@
                                   (dynamic/with-component-id id
                                     (component val)
                                     (str *html-out*))))
-                        (catch Exception e
-                          (println "Component render threw exception: " e)))
+                        (catch Throwable e
+                          (log/error e "Uncaught exception in component render"
+                                     ", id: " id
+                                     ", component fn: " component)))
               patches [(patch/make-patch patch target-id payload)]]
           (send-fn! (:channel @state)
                     (if-let [[patch payload]
@@ -224,7 +226,7 @@
            (try
              (render-fn)
              (catch Throwable t
-               (println "Exception while rendering!" t))
+               (log/error t "Exception while rendering!"))
              (finally
                (if (empty-context? ctx)
                  ;; No live components  rendered or callbacks registered, remove context immediately
@@ -268,7 +270,7 @@
    (fn [req]
      (when (= uri (:uri req))
        (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-             {send-fn! :send-fn! :as ctx} (get @current-live-contexts id)]
+             ctx (get @current-live-contexts id)]
          (if-not ctx
            {:status 404
             :body "No such live context"}
@@ -296,12 +298,14 @@
                                 ch
                                 (cheshire/encode [(patch/callback-success [reply-id reply])])))))
                          (catch Throwable t
-                           (when-let [reply (and reply-id (:ripley/failure (ex-data t))
-                                                 (merge {:message (.getMessage t)}
-                                                        (dissoc (ex-data t) :ripley/failure)))]
+                           (if-let [reply (and reply-id (:ripley/failure (ex-data t))
+                                               (merge {:message (.getMessage t)}
+                                                      (dissoc (ex-data t) :ripley/failure)))]
                              (server/send!
                               ch
-                              (cheshire/encode [(patch/callback-error [reply-id reply])])))))))))
+                              (cheshire/encode [(patch/callback-error [reply-id reply])]))
+                             ;; No on-failure reply was requested, log this as an uncaught
+                             (log/error t "Uncaught exception while processing callback"))))))))
 
                :on-open
                (fn [ch]
