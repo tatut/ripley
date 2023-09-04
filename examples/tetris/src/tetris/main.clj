@@ -51,23 +51,18 @@
         [:div.tetris
          [:div.score
           "SCORE: "
-          [::h/live (source/computed :score gs)
-           (fn [score]
-             (h/html
-              [:span score]))]]
+          [::h/live-let [score (source/computed :score gs)]
+           [:span score]]]
          [:div.board-and-next
           [:svg.board {:width (* 20 w)
                        :height (* 20 h)}
            [::h/for [y (range h)]
-            [::h/live
-             (source/computed #(nth (state/board-with-piece %) y) gs)
-             (fn [row]
-               (h/html
-                [:g.row
-                 [::h/for [x (range w)
-                           :let [empty? (= 0 (nth row x))]]
-                  [:rect {:x (* 20 x) :y (* 20 y) :width 20 :height 20
-                          :class (if empty? "e" (nth row x))}]]]))]]]
+            [::h/live-let [row (source/computed #(nth (state/board-with-piece %) y) gs)]
+             [:g.row
+              [::h/for [x (range w)
+                        :let [empty? (= 0 (nth row x))]]
+               [:rect {:x (* 20 x) :y (* 20 y) :width 20 :height 20
+                       :class (if empty? "e" (nth row x))}]]]]]]
 
           ;; Next piece display
           [:div.next
@@ -85,9 +80,8 @@
                            :class (if (= 0 p) "e" p)}]]]]))]]]]
 
          ;; Game over dialog
-         [::h/live (source/computed :game-over? gs)
-          #(h/html
-            [:dialog.game-over {:open %} "Game over"])]]]]])))
+         [::h/live-let [open? (source/computed :game-over? gs)]
+          [:dialog.game-over {:open open?} "Game over"]]]]]])))
 
 (def tetris-routes
   (routes

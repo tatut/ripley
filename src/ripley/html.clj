@@ -1,11 +1,9 @@
 (ns ripley.html
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [ripley.live.context :as context]
             [ripley.live.protocols :as p]
             [ripley.live.source :as source]
-            [clojure.core.async :as async]
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
             [ripley.impl.dynamic :as dynamic])
@@ -22,14 +20,6 @@
 (defn dyn! [& things]
   ;; Output some dynamic part
   (.write ^java.io.Writer *html-out* (StringEscapeUtils/escapeHtml4 (str/join things))))
-
-(defn to-camel-case [kw]
-  (str/replace (name kw)
-               #"-\w"
-               (fn [m]
-                 (str/upper-case (subs m 1)))))
-
-
 
 (defn element-class-names [elt]
   (map second (re-seq #"\.([^.#]+)" (name elt))))
@@ -448,6 +438,23 @@
                      ~id-sym
                      "\"></script>")))))))
 
+(defn- compile-live-let [element]
+  (let [[_ bindings & body] element]
+    (assert (and (vector? bindings)
+                 (>= (count bindings) 2)
+                 (even? (count bindings))
+                 (= 1 (count body))
+                 (vector? (first body)))
+            "Live let requires let bindings and a single body element")
+    (let [[args source & other-bindings] bindings]
+      (compile-live [::live
+                     source
+                     `(fn [~args]
+                        ~(if (seq other-bindings)
+                           `(let [~@other-bindings]
+                              (html ~(first body)))
+                           `(html ~(first body))))]))))
+
 (defmulti compile-special
   "Compile a special element, that is not regular HTML vector. Dispatches on the first keyword."
   (fn [[special-kw & _rest]] special-kw))
@@ -459,6 +466,7 @@
 (defmethod compile-special ::when [body] (compile-when body))
 (defmethod compile-special ::cond [body] (compile-cond body))
 (defmethod compile-special ::live [body] (compile-live body))
+(defmethod compile-special ::live-let [body] (compile-live-let body))
 
 (defn compile-html [body]
   (cond
@@ -587,6 +595,8 @@
        compile-html
        optimize
        wrap-try))
+
+
 
 (comment
   (defn list-item [x]

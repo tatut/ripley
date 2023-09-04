@@ -102,6 +102,9 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 
 ## Changes
 
+### 2023-09-02
+- Support a `::h/live-let` directive that is more concise
+
 ### 2023-08-30
 - Log errors in component render and callback processing
 
