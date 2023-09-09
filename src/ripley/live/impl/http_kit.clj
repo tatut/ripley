@@ -21,14 +21,14 @@
      (when (= uri (:uri req))
        (try
          (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-               ch (object-array 1)
-               send! (partial send-fn! (delay (aget ch 0)))
+               ch* (object-array 1)
+               send! (partial send-fn! (delay (aget ch* 0)))
                callbacks (initialize-connection id send!)]
            (server/as-channel
             req
             {:on-open
              (fn [ch]
-               (aset ch 0 ch)
+               (aset ch* 0 ch)
                (log/debug "Connected, ws? " (server/websocket? ch))
                ;; If connection is not WebSocket, initialize SSE headers
                (when-not (server/websocket? ch)

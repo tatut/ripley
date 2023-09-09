@@ -3,7 +3,6 @@
   (:require [ripley.live.protocols :as p]
             [ripley.live.connection :as c]
             [clojure.core.async :as async :refer [go <! timeout]]
-            [ring.middleware.params :as params]
             [cheshire.core :as cheshire]
             [ring.util.io :as ring-io]
             [clojure.java.io :as io]
@@ -315,7 +314,7 @@
                        :status :connected))))))))
 
 (defn connection-handler
-  "Handler that initiates WebSocket (or SSE) connection with ripley server
+  "Create a handler that initiates WebSocket (or SSE) connection with ripley server
   and browser.
 
   Options:
