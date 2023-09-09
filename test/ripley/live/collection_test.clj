@@ -12,7 +12,8 @@
   (let [wait-ch (async/chan)]
     (context/->DefaultLiveContext (fn [_ch msg]
                                     (async/>!! sent-ch msg))
-                                  (atom (context/initial-context-state wait-ch)))))
+                                  (atom (context/initial-context-state wait-ch))
+                                  {})))
 
 (defmacro with-html-out-str [& body]
   `(let [out# (java.io.StringWriter.)]
