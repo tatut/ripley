@@ -1,7 +1,6 @@
 (ns ripley.live.context
   "Live context"
   (:require [ripley.live.protocols :as p]
-            [clojure.core.async :as async :refer [go <! timeout]]
             [cheshire.core :as cheshire]
             [ring.util.io :as ring-io]
             [clojure.java.io :as io]
@@ -197,12 +196,12 @@
 
 
 
-(defonce ping-executor
+(defonce background-executor
   (delay (Executors/newScheduledThreadPool 0)))
 
 (defn- schedule-ping [send! ping-interval]
   (.scheduleWithFixedDelay
-   ^ScheduledExecutorService @ping-executor
+   ^ScheduledExecutorService @background-executor
    #(send! "!")
    ping-interval ping-interval
    TimeUnit/SECONDS))
@@ -238,13 +237,14 @@
                     (log/debug "No live components, remove context with id: " id)
                     (swap! current-live-contexts dissoc id))
 
-                 ;; Some live components were rendered by the page,
-                 ;; add this context as awaiting websocket.
-                  (go
-                    (<! (timeout 30000))
-                    (when (= :not-connected (:status @state))
-                      (log/info "Removing context that wasn't connected within 30 seconds")
-                      (cleanup-ctx ctx)))))))))))))
+                  ;; Some live components were rendered by the page,
+                  ;; add this context as awaiting websocket.
+                  (.schedule ^ScheduledExecutorService @background-executor
+                             ^java.lang.Runnable
+                             #(when (= :not-connected (:status @state))
+                                (log/info "Removing context that wasn't connected within 30 seconds")
+                                (cleanup-ctx ctx))
+                             30 TimeUnit/SECONDS)))))))))))
 
 (defn current-context-id []
   (:context-id @(:state dynamic/*live-context*)))
