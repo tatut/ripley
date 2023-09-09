@@ -616,9 +616,26 @@
 
 (defn render-response
   "Return a ring reponse that renders HTML.
-  The function is called with HTML output bound."
+  The function is called with HTML output bound.
+
+  To customize ring response being sent out, an optional response map
+  can be provided. The response may not contain a :body as that is generated
+  by the rendering.
+
+  To customize the context, an optional options map can be given as the last
+  argument. The following options are supported:
+
+  :bindings   Set of vars to capture bindings for. Whenever a callback
+              or component is registered during rendering, the bindings for the
+              vars in this set are captured. The bindings are reinstated when
+              the component is rerended or the callback invoked. This makes it
+              possible to use dynamic scope (like user info, db pools etc)
+              and not need to pass everything as input parameters to components.
+"
   ([render-fn] (render-response {} render-fn))
   ([response-map render-fn]
+   (render-response response-map render-fn {}))
+  ([response-map render-fn context-options]
    (assert (not (contains? response-map :body))
            "Response map can't contain body. Render gives body.")
    (merge-with
@@ -626,7 +643,7 @@
       (if (map? a) (merge a b) b))
     {:status 200
      :headers {"Content-Type" "text/html"}
-     :body (context/render-with-context render-fn)}
+     :body (context/render-with-context render-fn context-options)}
     response-map)))
 
 (defn live-client-script

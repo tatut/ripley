@@ -10,7 +10,8 @@
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
             [ripley.impl.dynamic :as dynamic]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [ripley.impl.util :refer [arity]])
   (:import (java.util.concurrent Executors TimeUnit ScheduledExecutorService Future)))
 
 (set! *warn-on-reflection* true)
@@ -90,12 +91,27 @@
                       (conj patches (patch/make-patch patch target-id payload))
                       patches)))))))
 
+(defn- bind [bindings function]
+  (if-not (seq bindings)
+    function
+    (let [current-bindings (select-keys (get-thread-bindings) bindings)]
+      (case (arity function)
+        0 (fn [] (with-bindings current-bindings (function)))
+        1 (fn [a] (with-bindings current-bindings (function a)))
+        2 (fn [a b] (with-bindings current-bindings (function a b)))
+        3 (fn [a b c] (with-bindings current-bindings (function a b c)))
+        4 (fn [a b c d] (with-bindings current-bindings (function a b c d)))
+        5 (fn [a b c d e] (with-bindings current-bindings (function a b c d e)))
+        6 (fn [a b c d e f] (with-bindings current-bindings (function a b c d e f)))
+        7 (fn [a b c d e f g] (with-bindings current-bindings (function a b c d e f g)))
+        (fn [& args] (with-bindings (apply function args)))))))
 
-(defrecord DefaultLiveContext [send-fn! state]
+(defrecord DefaultLiveContext [send-fn! state bindings]
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
-    (let [parent-component-id dynamic/*component-id*
+    (let [component (bind bindings component)
+          parent-component-id dynamic/*component-id*
           {id :last-component-id}
           (swap! state
                  #(let [id (:next-id %)
@@ -127,7 +143,8 @@
       id))
 
   (register-callback! [_this callback]
-    (let [parent-component-id dynamic/*component-id*
+    (let [callback (bind bindings callback)
+          parent-component-id dynamic/*component-id*
           {id :last-callback-id}
           (swap! state
                  #(let [id (:next-id %)
@@ -211,37 +228,40 @@
 
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
-  [render-fn]
-  (let [wait-ch (async/chan)
-        {id :context-id :as initial-state} (initial-context-state wait-ch)
-        state (atom initial-state)
-        ctx (->DefaultLiveContext
-             (queued-send-fn state default-send-fn!) state)]
-    (swap! current-live-contexts assoc id ctx)
-    (ring-io/piped-input-stream
-     (fn [out]
-       (with-open [w (io/writer out)]
-         (binding [dynamic/*live-context* ctx
-                   *html-out* w]
-           (try
-             (render-fn)
-             (catch Throwable t
-               (log/error t "Exception while rendering!"))
-             (finally
-               (if (empty-context? ctx)
+  ([render-fn]
+   (render-with-context render-fn {}))
+  ([render-fn {:keys [bindings]
+               :or {bindings #{}} :as _context-options}]
+   (let [wait-ch (async/chan)
+         {id :context-id :as initial-state} (initial-context-state wait-ch)
+         state (atom initial-state)
+         ctx (->DefaultLiveContext
+              (queued-send-fn state default-send-fn!) state bindings)]
+     (swap! current-live-contexts assoc id ctx)
+     (ring-io/piped-input-stream
+      (fn [out]
+        (with-open [w (io/writer out)]
+          (binding [dynamic/*live-context* ctx
+                    *html-out* w]
+            (try
+              (render-fn)
+              (catch Throwable t
+                (log/error t "Exception while rendering!"))
+              (finally
+                (if (empty-context? ctx)
                  ;; No live components  rendered or callbacks registered, remove context immediately
-                 (do
-                   (log/debug "No live components, remove context with id: " id)
-                   (swap! current-live-contexts dissoc id))
+                  (do
+                    (log/debug "No live components, remove context with id: " id)
+                    (swap! current-live-contexts dissoc id))
 
                  ;; Some live components were rendered by the page,
                  ;; add this context as awaiting websocket.
-                 (go
-                   (<! (timeout 30000))
-                   (when (= :not-connected (:status @state))
-                     (log/info "Removing context that wasn't connected within 30 seconds")
-                     (async/close! wait-ch)
-                     (cleanup-ctx ctx))))))))))))
+                  (go
+                    (<! (timeout 30000))
+                    (when (= :not-connected (:status @state))
+                      (log/info "Removing context that wasn't connected within 30 seconds")
+                      (async/close! wait-ch)
+                      (cleanup-ctx ctx)))))))))))))
 
 (defn current-context-id []
   (:context-id @(:state dynamic/*live-context*)))
@@ -287,7 +307,7 @@
                  (if (= data "!")
                    (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
                    (let [[id args reply-id] (cheshire/decode data keyword)
-                         callback (-> ctx :state deref :callbacks (get id))]
+                         callback (some-> ctx :state deref :callbacks (get id))]
                      (if-not callback
                        (log/debug "Got callback with unrecognized id: " id)
                        (try

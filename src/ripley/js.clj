@@ -3,10 +3,10 @@
   (:require [ripley.live.protocols :as p]
             [ripley.impl.dynamic :as dyn]
             [ripley.html :as h]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [ripley.impl.util :refer [arity]]))
 
-(defn- arity [f]
-  (-> f class .getDeclaredMethods first .getParameterTypes alength))
+
 
 (defn- wrap-success [fun]
   (case (arity fun)

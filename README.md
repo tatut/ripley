@@ -99,8 +99,43 @@ see namespace docstring for an integration source in `ripley.integration.<type>`
 | manifold | Integrate manifold library `deferred` and `stream` as source |
 | xtdb | Integrate XTDB query as an automatically updating source |
 
+## Working with components
+
+### Component functions
+
+In Ripley, components are functions that take in parameters and **output** HTML fragment
+as a side-effect. They do not return a value. This is different from normal hiccup, where
+functions would return a hiccup vector describing the HTML.
+
+Ripley uses the `ripley.html/html` macro to convert a hiccup style body into plain Clojure
+that writes HTML. The macro also adds Ripley's internal tracking attributes so components
+can be updated on the fly.
+
+Any Clojure code can be called inside the body, but take note that return values are discarded.
+This is a common mistake, forgetting to use the HTML macro in a function and returning a vector.
+The caller will simply discard it and nothing is output.
+
+### Child components
+
+Components form a tree so a component can have child components with their own sources. The children
+are registered under the parent and if the parent fully rerenders, the children are recursively
+cleaned up. A component does not need to care if it is at the top level or a child of some other
+component.
+
+The main consideration comes from the sources used. If the parent component creates per render
+sources for the children, the children will lose the state when the parent is rerendered.
+
+### Dynamic scope
+
+Ripley supports capturing dynamic scope that was in place when a component or callback was created.
+This can be used to avoid passing in every piece of context to all components (like user information
+or db connection pools). The set of vars to capture must be configured when calling
+`ripley.html/render-response`.
 
 ## Changes
+
+### 2023-09-09
+- Support dynamic binding capture
 
 ### 2023-09-02
 - Support a `::h/live-let` directive that is more concise
