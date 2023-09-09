@@ -39,16 +39,17 @@
 
 (defn- update-component!
   "Callback for source changes that send updates to component."
-  [{:keys [state send-fn!] :as ctx}
+  [{:keys [state] :as ctx}
    id
    {:keys [source component patch parent did-update should-update?]
     :or {patch :replace
          should-update? (constantly true)}}
    val]
   (log/trace "component " id " has " val)
-  (let [update? (should-update? val)]
+  (let [update? (should-update? val)
+        send! (:send! @state)]
     (when (and update? (= :replace patch))
-      (swap! (:state ctx) (partial cleanup-component false) id))
+      (swap! state (partial cleanup-component false) id))
     (cond
       ;; source says this component should be removed, send deletion
       ;; patch to client (unless it targets parent, like attributes)
@@ -56,8 +57,7 @@
       (= val :ripley.live/tombstone)
       (do
         (when-not (patch/target-parent? patch)
-          (send-fn! (:channel @state)
-                    [(patch/delete id)]))
+          (send! [(patch/delete id)]))
         (p/close! source))
 
       ;; Marker that this component was already removed from client
@@ -83,13 +83,13 @@
                                      ", id: " id
                                      ", component fn: " component)))
               patches [(patch/make-patch patch target-id payload)]]
-          (send-fn! (:channel @state)
-                    (if-let [[patch payload]
-                             (when did-update
-                               (did-update val))]
-                    ;; If there is a did-update handler, send that as well
-                      (conj patches (patch/make-patch patch target-id payload))
-                      patches)))))))
+          (send!
+           (if-let [[patch payload]
+                    (when did-update
+                      (did-update val))]
+             ;; If there is a did-update handler, send that as well
+             (conj patches (patch/make-patch patch target-id payload))
+             patches)))))))
 
 (defn- bind [bindings function]
   (if-not (seq bindings)
@@ -298,7 +298,9 @@
                       (log/error t "Uncaught exception while processing callback"))))))))
         (on-open [_]
           (let [{send-queue :send-queue}
-                (swap! (:state ctx) assoc :send! send!)]
+                (swap! (:state ctx) assoc
+                       :send! (fn send-patches-as-json [patches]
+                                (send! (cheshire/encode patches))))]
             ;; Send any items in the send queue
             (doseq [queued-data send-queue
                     :let [data (cheshire/encode queued-data)]]
