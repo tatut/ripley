@@ -1,7 +1,6 @@
 (ns ripley.live.context
   "Live context"
   (:require [ripley.live.protocols :as p]
-            [ripley.live.connection :as c]
             [clojure.core.async :as async :refer [go <! timeout]]
             [cheshire.core :as cheshire]
             [ring.util.io :as ring-io]
@@ -273,7 +272,7 @@
   (let [ctx (get @current-live-contexts context-id)]
     (if-not ctx
       (throw (ex-info "Unknown live context" {:context-id context-id}))
-      (reify c/Callbacks
+      (reify p/ConnectionCallbacks
         (on-close [_ _status]
           (cleanup-ctx ctx))
         (on-receive [_ data]

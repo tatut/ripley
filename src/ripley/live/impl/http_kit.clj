@@ -1,6 +1,6 @@
 (ns ripley.live.impl.http-kit
   "http-kit WebSocket connection implementation."
-  (:require [ripley.live.connection :as c]
+  (:require [ripley.live.protocols :as p]
             [org.httpkit.server :as server]
             [clojure.tools.logging :as log]
             [ring.middleware.params :as params]))
@@ -35,14 +35,14 @@
                  (server/send! ch {:status 200
                                    :headers {"Content-Type" "text/event-stream"}}
                                false))
-               (c/on-open callbacks))
+               (p/on-open callbacks))
 
              :on-close
              (fn [_ch status]
-               (c/on-close callbacks status))
+               (p/on-close callbacks status))
 
              :on-receive
              (fn [_ch ^String data]
-               (c/on-receive callbacks data))}))
+               (p/on-receive callbacks data))}))
          (catch Exception e
            (log/error e "Unable to initialize live context")))))))

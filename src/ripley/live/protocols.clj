@@ -52,3 +52,13 @@ Returns 0-arity function that will remove the listener when called.")
   (callback-on-failure [this]
     "Return JS function code to call when server callback has failed. The function will be called
    with the original arguments of the callback and an object describing the error."))
+
+(defprotocol ConnectionCallbacks
+  "Protocol for callbacks on a live page connection."
+  (on-close [this status]
+    "Connection closed with status")
+  (on-receive [this data]
+    "Callback for data received.
+     Data must be a string. Other types of messages are not supported.")
+  (on-open [this]
+    "Connection opened."))
