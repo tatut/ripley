@@ -12,6 +12,8 @@ jobs:
       uses: DeLaGuardo/setup-clojure@master
       with:
         cli: '1.11.1.1413'
+    - name: debug
+      run: clojure -version
     - name: build library jar
       run: clojure -T:build jar
     - name: deploy to clojars
