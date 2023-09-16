@@ -11,6 +11,9 @@
 (def basis (b/create-basis {:project "deps.edn"}))
 (def jar-file "target/ripley.jar") ;(format "target/%s-%s.jar" (name lib) version)
 
+(defn commit-sha []
+  (b/git-process {:git-args ["rev-parse" "HEAD"]}))
+
 (defn clean [_]
   (b/delete {:path "target"}))
 
@@ -19,7 +22,10 @@
                 :lib lib
                 :version version
                 :basis basis
-                :src-dirs ["src"]})
+                :src-dirs ["src"]
+                :scm {:url "https://github.com/tatut/ripley"
+                      :connection "scm:git:git://github.com/tatut/ripley.git"
+                      :tag (commit-sha)}})
   (b/copy-dir {:src-dirs ["src" "resources"]
                :target-dir class-dir})
   (b/jar {:class-dir class-dir
