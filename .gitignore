@@ -7,3 +7,6 @@
 /examples/tictactoe/node_modules
 .cpcache
 .nrepl-port
+/target/
+/.lsp/
+/.clj-kondo/
