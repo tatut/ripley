@@ -13,10 +13,8 @@ jobs:
       with:
         cli: '1.11.1.1413'
     - uses: actions/checkout@v2
-    - name: debug
-      run: clojure -version
-    - name: debug2
-      run: clojure -Spath -A:build
+      with:
+        fetch-depth: 0
     - name: build library jar
       run: clojure -T:build jar
     - name: deploy to clojars
