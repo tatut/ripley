@@ -1,0 +1,21 @@
+name: deploy
+on:
+  push:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: clojars
+    steps:
+    - name: setup clojure
+      uses: DeLaGuardo/setup-clojure@master
+      with:
+        cli: '1.11.1.1149'
+    - name: build library jar
+      run: clojure -T:build jar
+    - name: deploy to clojars
+      env:
+        CLOJARS_USERNAME: ${{ secrets.CLOJARS_USERNAME }}
+        CLOJARS_PASSWORD: ${{ secrets.CLOJARS_PASSWORD }}
+      run: clojure -X:deploy

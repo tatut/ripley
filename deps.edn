@@ -24,4 +24,14 @@
   :pedestal {:extra-deps {io.pedestal/pedestal.service {:mvn/version "0.6.0"}
                           io.pedestal/pedestal.jetty {:mvn/version "0.6.0"}}}
 
-  }}
+  ;; Run with clj -T:build function-in-build
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}
+          :ns-default build}
+
+  ;; Deploy to clojars
+  :deploy {:extra-deps {slipset/deps-deploy {:mvn/version "0.2.1"}}
+           :exec-fn deps-deploy.deps-deploy/deploy
+           :exec-args {:installer :remote
+                       :sign-releases? false
+                       :pom-file "target/classes/META-INF/maven/io.github.tatut/ripley/pom.xml"
+                       :artifact "target/ripley.jar"}}}}
