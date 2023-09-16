@@ -12,6 +12,7 @@ jobs:
       uses: DeLaGuardo/setup-clojure@master
       with:
         cli: '1.11.1.1413'
+    - uses: actions/checkout@v2
     - name: debug
       run: clojure -version
     - name: debug2
