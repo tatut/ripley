@@ -17,7 +17,11 @@
                       manifold/manifold {:mvn/version "0.1.9-alpha4"}}
          :main-opts ["-m" "cognitect.test-runner"]}
 
-  ;; Profiles for developing integration components
+  ;; Profiles for developing integration components and alternate servers
   ;; Add these also to :test profile so they can be tested in CI
   :redis {:extra-deps {com.taoensso/carmine {:mvn/version "3.1.0"}}}
-  :manifold {:extra-deps {manifold/manifold {:mvn/version "0.1.9-alpha4"}}}}}
+  :manifold {:extra-deps {manifold/manifold {:mvn/version "0.1.9-alpha4"}}}
+  :pedestal {:extra-deps {io.pedestal/pedestal.service {:mvn/version "0.6.0"}
+                          io.pedestal/pedestal.jetty {:mvn/version "0.6.0"}}}
+
+  }}
