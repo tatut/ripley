@@ -13,8 +13,8 @@
     (-> session .getRemote (.sendString data))))
 
 (defn make-ws-listener
-  [^ServletUpgradeRequest req {::keys [initialize-connection]}]
-  (let [id (-> req .getParameterMap (.get "id"))
+  [^ServletUpgradeRequest req {::keys [initialize-connection] :as m}]
+  (let [id (-> req .getParameterMap (.get "id") first java.util.UUID/fromString)
         session* (object-array 1)
         send! (partial send-fn! (delay (aget session* 0)))
         callbacks (initialize-connection id send!)]

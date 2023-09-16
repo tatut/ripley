@@ -1,0 +1,5 @@
+{:paths ["src" "../../resources" "resources"]
+ :deps {ripley {:local/root "../.."}
+        io.pedestal/pedestal.service {:mvn/version "0.6.0"}
+        io.pedestal/pedestal.jetty {:mvn/version "0.6.0"}}
+ :aliases {:run {:main-opts ["-m" "pedestal-example.main"]}}}
