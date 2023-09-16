@@ -9,11 +9,10 @@
             [clojure.string :as str]))
 
 (defn test-context [sent-ch]
-  (let [wait-ch (async/chan)]
-    (context/->DefaultLiveContext (fn [_ch msg]
-                                    (async/>!! sent-ch msg))
-                                  (atom (context/initial-context-state wait-ch))
-                                  {})))
+  (context/->DefaultLiveContext
+   (atom (merge (context/initial-context-state)
+                {:send! #(async/>!! sent-ch %)}))
+   {}))
 
 (defmacro with-html-out-str [& body]
   `(let [out# (java.io.StringWriter.)]
@@ -41,9 +40,6 @@
                 :container-element :li}))]
         (is (str/starts-with? output "<li data-rl=\"0\""))
         (is (str/ends-with? output "</li>")))
-
-      ;; Start the live context
-      (async/close! (:wait-ch @(:state ctx)))
 
       ;; Return handles needed to test the live collection handling
       {:sent-ch sent-ch

@@ -1,9 +1,6 @@
 (ns ripley.live.context
   "Live context"
   (:require [ripley.live.protocols :as p]
-            [clojure.core.async :as async :refer [go go-loop <! >! timeout]]
-            [org.httpkit.server :as server]
-            [ring.middleware.params :as params]
             [cheshire.core :as cheshire]
             [ring.util.io :as ring-io]
             [clojure.java.io :as io]
@@ -39,16 +36,17 @@
 
 (defn- update-component!
   "Callback for source changes that send updates to component."
-  [{:keys [state send-fn!] :as ctx}
+  [{:keys [state] :as ctx}
    id
    {:keys [source component patch parent did-update should-update?]
     :or {patch :replace
          should-update? (constantly true)}}
    val]
   (log/trace "component " id " has " val)
-  (let [update? (should-update? val)]
+  (let [update? (should-update? val)
+        send! (:send! @state)]
     (when (and update? (= :replace patch))
-      (swap! (:state ctx) (partial cleanup-component false) id))
+      (swap! state (partial cleanup-component false) id))
     (cond
       ;; source says this component should be removed, send deletion
       ;; patch to client (unless it targets parent, like attributes)
@@ -56,8 +54,7 @@
       (= val :ripley.live/tombstone)
       (do
         (when-not (patch/target-parent? patch)
-          (send-fn! (:channel @state)
-                    [(patch/delete id)]))
+          (send! [(patch/delete id)]))
         (p/close! source))
 
       ;; Marker that this component was already removed from client
@@ -83,13 +80,13 @@
                                      ", id: " id
                                      ", component fn: " component)))
               patches [(patch/make-patch patch target-id payload)]]
-          (send-fn! (:channel @state)
-                    (if-let [[patch payload]
-                             (when did-update
-                               (did-update val))]
-                    ;; If there is a did-update handler, send that as well
-                      (conj patches (patch/make-patch patch target-id payload))
-                      patches)))))))
+          (send!
+           (if-let [[patch payload]
+                    (when did-update
+                      (did-update val))]
+             ;; If there is a did-update handler, send that as well
+             (conj patches (patch/make-patch patch target-id payload))
+             patches)))))))
 
 (defn- bind [bindings function]
   (if-not (seq bindings)
@@ -106,7 +103,7 @@
         7 (fn [a b c d e f g] (with-bindings current-bindings (function a b c d e f g)))
         (fn [& args] (with-bindings (apply function args)))))))
 
-(defrecord DefaultLiveContext [send-fn! state bindings]
+(defrecord DefaultLiveContext [state bindings]
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
@@ -169,8 +166,11 @@
       nil))
 
   (send! [_this payload]
-    (let [ch (:channel @state)]
-      (send-fn! ch payload))))
+    (if-let [send! (:send! @state)]
+      ;; Connection is open, send it
+      (send! payload)
+      ;; No connection yet, queue this send
+      (swap! state update :send-queue (fnil conj []) payload))))
 
 (defonce current-live-contexts (atom {}))
 
@@ -187,39 +187,24 @@
 
 (defn initial-context-state
   "Return initial state for a new context"
-  [wait-ch]
+  []
   {:next-id 0
    :status :not-connected
    :components {}
    :callbacks {}
-   :context-id (java.util.UUID/randomUUID)
-   :wait-ch wait-ch})
+   :context-id (java.util.UUID/randomUUID)})
 
-(defn- default-send-fn! [ch data]
-  (let [data (cheshire/encode data)]
-    (server/send!
-     ch
-     (if (server/websocket? ch)
-       data
-       (str "data: " data "\n\n"))
-     false)))
 
-(defonce ping-executor
+
+(defonce background-executor
   (delay (Executors/newScheduledThreadPool 0)))
 
-(defn- schedule-ping [ch ping-interval]
+(defn- schedule-ping [send! ping-interval]
   (.scheduleWithFixedDelay
-   ^ScheduledExecutorService @ping-executor
-   #(server/send! ch "!")
+   ^ScheduledExecutorService @background-executor
+   #(send! "!")
    ping-interval ping-interval
    TimeUnit/SECONDS))
-
-(defn- queued-send-fn [state-atom send-fn!]
-  (fn [ch data]
-    (if (nil? ch)
-      ;; No connection yet, queue this send
-      (swap! state-atom update :send-queue (fnil conj []) data)
-      (send-fn! ch data))))
 
 (defn- empty-context? [{state :state}]
   (let [{:keys [components callbacks]} @state]
@@ -232,11 +217,9 @@
    (render-with-context render-fn {}))
   ([render-fn {:keys [bindings]
                :or {bindings #{}} :as _context-options}]
-   (let [wait-ch (async/chan)
-         {id :context-id :as initial-state} (initial-context-state wait-ch)
+   (let [{id :context-id :as initial-state} (initial-context-state)
          state (atom initial-state)
-         ctx (->DefaultLiveContext
-              (queued-send-fn state default-send-fn!) state bindings)]
+         ctx (->DefaultLiveContext state bindings)]
      (swap! current-live-contexts assoc id ctx)
      (ring-io/piped-input-stream
       (fn [out]
@@ -254,14 +237,14 @@
                     (log/debug "No live components, remove context with id: " id)
                     (swap! current-live-contexts dissoc id))
 
-                 ;; Some live components were rendered by the page,
-                 ;; add this context as awaiting websocket.
-                  (go
-                    (<! (timeout 30000))
-                    (when (= :not-connected (:status @state))
-                      (log/info "Removing context that wasn't connected within 30 seconds")
-                      (async/close! wait-ch)
-                      (cleanup-ctx ctx)))))))))))))
+                  ;; Some live components were rendered by the page,
+                  ;; add this context as awaiting websocket.
+                  (.schedule ^ScheduledExecutorService @background-executor
+                             ^java.lang.Runnable
+                             #(when (= :not-connected (:status @state))
+                                (log/info "Removing context that wasn't connected within 30 seconds")
+                                (cleanup-ctx ctx))
+                             30 TimeUnit/SECONDS)))))))))))
 
 (defn current-context-id []
   (:context-id @(:state dynamic/*live-context*)))
@@ -276,79 +259,77 @@
       {:status 404
        :body "Unknown callback"})))
 
+(defn initialize-connection
+  "Initialize a connection for the given live context id and send function.
+  The [[send!]] function must have arity of 1 that takes a (String) data to
+  send to the client.
+
+  If no context for the given id exists, throws an exception.
+
+  Returns an instance of Callbacks which the caller must configure on the
+  underlying connection."
+  [{:keys [ping-interval]} context-id send!]
+  (let [ctx (get @current-live-contexts context-id)]
+    (if-not ctx
+      (throw (ex-info "Unknown live context" {:context-id context-id}))
+      (reify p/ConnectionCallbacks
+        (on-close [_ _status]
+          (cleanup-ctx ctx))
+        (on-receive [_ data]
+          (if (= data "!")
+            (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
+            (let [[id args reply-id] (cheshire/decode data keyword)
+                  callback (some-> ctx :state deref :callbacks (get id))]
+              (if-not callback
+                (log/debug "Got callback with unrecognized id: " id)
+                (try
+                  (dynamic/with-live-context ctx
+                    (let [res (apply callback args)]
+                      (when-let [reply (and reply-id (map? res) (:ripley/success res))]
+                        (send! (cheshire/encode [(patch/callback-success [reply-id reply])])))))
+                  (catch Throwable t
+                    (if-let [reply (and reply-id (:ripley/failure (ex-data t))
+                                        (merge {:message (.getMessage t)}
+                                               (dissoc (ex-data t) :ripley/failure)))]
+                      (send! (cheshire/encode [(patch/callback-error [reply-id reply])]))
+                      ;; No on-failure reply was requested, log this as an uncaught
+                      (log/error t "Uncaught exception while processing callback"))))))))
+        (on-open [_]
+          (let [{send-queue :send-queue}
+                (swap! (:state ctx) assoc
+                       :send! (fn send-patches-as-json [patches]
+                                (send! (cheshire/encode patches))))]
+            ;; Send any items in the send queue
+            (doseq [queued-data send-queue
+                    :let [data (cheshire/encode queued-data)]]
+              (send! data)))
+
+          (swap! (:state ctx)
+                 #(-> %
+                      (dissoc :send-queue)
+                      (assoc
+                       :ping-task (when ping-interval
+                                    (schedule-ping send! ping-interval))
+                       :status :connected))))))))
+
 (defn connection-handler
-  "Handler that initiates WebSocket (or SSE) connection with ripley server
+  "Create a handler that initiates WebSocket (or SSE) connection with ripley server
   and browser.
 
   Options:
 
+  :implementation the name of the server implementation to use (defaults to :http-kit)
+                  will call `ripley.live.impl.<implementation>/handler` to create the handler
   :ping-interval  Ping interval seconds. If specified, send ping message to client periodically.
                   This can facilitate keeping alive connections when load balancers have some
-                  idle timeout. "
-  [uri & {:keys [ping-interval]}]
-  (params/wrap-params
-   (fn [req]
-     (when (= uri (:uri req))
-       (let [id (-> req :query-params (get "id") java.util.UUID/fromString)
-             ctx (get @current-live-contexts id)]
-         (if-not ctx
-           {:status 404
-            :body "No such live context"}
-           (if (= :post (:request-method req))
-             (post-callback ctx (:body req))
-             ;; Serve events as WebSocket or SSE
-             (server/as-channel
-              req
-              {:on-close
-               (fn [_ch _status]
-                 (cleanup-ctx ctx))
-               :on-receive
-               (fn [ch ^String data]
-                 (if (= data "!")
-                   (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-                   (let [[id args reply-id] (cheshire/decode data keyword)
-                         callback (some-> ctx :state deref :callbacks (get id))]
-                     (if-not callback
-                       (log/debug "Got callback with unrecognized id: " id)
-                       (try
-                         (dynamic/with-live-context ctx
-                           (let [res (apply callback args)]
-                             (when-let [reply (and reply-id (map? res) (:ripley/success res))]
-                               (server/send!
-                                ch
-                                (cheshire/encode [(patch/callback-success [reply-id reply])])))))
-                         (catch Throwable t
-                           (if-let [reply (and reply-id (:ripley/failure (ex-data t))
-                                               (merge {:message (.getMessage t)}
-                                                      (dissoc (ex-data t) :ripley/failure)))]
-                             (server/send!
-                              ch
-                              (cheshire/encode [(patch/callback-error [reply-id reply])]))
-                             ;; No on-failure reply was requested, log this as an uncaught
-                             (log/error t "Uncaught exception while processing callback"))))))))
+                  idle timeout.
 
-               :on-open
-               (fn [ch]
-                 (log/debug "Connected, ws? " (server/websocket? ch))
-                 ;; If connection is not WebSocket, initialize SSE headers
-                 (when-not (server/websocket? ch)
-                   (server/send! ch {:status 200
-                                     :headers {"Content-Type" "text/event-stream"}}
-                                 false))
-
-                 ;; Send any items in the send queue
-                 (doseq [queued-data (:send-queue @(:state ctx))]
-                   (default-send-fn! ch queued-data))
-
-                 ;; Close the wait-ch so the registered live component
-                 ;; go-blocks will start running
-                 ;; TODO: We shouldn't need this anymore
-                 (async/close! (:wait-ch @(:state ctx)))
-                 (swap! (:state ctx)
-                        #(-> %
-                             (dissoc :send-queue :wait-ch)
-                             (assoc
-                              :channel ch
-                              :ping-task (when ping-interval
-                                           (schedule-ping ch ping-interval))
-                              :status :connected))))}))))))))
+  See other server implementation ns for possible other options.
+  "
+  [uri & {:keys [implementation]
+          :or {implementation :http-kit} :as options}]
+  (let [implementation-handler-fn
+        (requiring-resolve (symbol (str "ripley.live.impl." (name implementation))
+                                   "handler"))]
+    (implementation-handler-fn uri options
+                               (partial initialize-connection options))))
