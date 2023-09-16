@@ -8,7 +8,11 @@
                      today
                      (b/git-count-revs nil)))
 (def class-dir "target/classes")
-(def basis (b/create-basis {:project "deps.edn"}))
+(def basis
+  (b/create-basis {:project "deps.edn"
+                   ;; Add all optional dependencies as well, so cljdoc analysis succeeds
+                   :aliases [:manifold :redis]}))
+
 (def jar-file "target/ripley.jar") ;(format "target/%s-%s.jar" (name lib) version)
 
 (defn commit-sha []
