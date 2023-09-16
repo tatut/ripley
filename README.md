@@ -134,6 +134,9 @@ or db connection pools). The set of vars to capture must be configured when call
 
 ## Changes
 
+### 2023-09-16
+- Alternate server implementation support (with pedestal+jetty implementation)
+
 ### 2023-09-09
 - Support dynamic binding capture
 
