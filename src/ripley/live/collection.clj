@@ -155,9 +155,7 @@
 
         unlisten-fn (object-array 1)
         ;; Register dummy component as parent, that has no render and will never receive updates
-        collection-id (p/register! ctx nil :_ignore {:cleanup #(do
-                                                                 (println "unlisten called!")
-                                                                 ((aget unlisten-fn 0)))})
+        collection-id (p/register! ctx nil :_ignore {:cleanup #((aget unlisten-fn 0))})
 
         ;; Store individual :source and :component-id for entities
         components-by-key
