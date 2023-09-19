@@ -168,13 +168,9 @@
 
     (log/debug "Initial collection: " (count initial-collection) "items")
     (aset unlisten-fn 0
-          (let [unlisten
-                (listen-collection!
-                 source item-source-fn initial-collection collection-id
-                 key render components-by-key)]
-            #(do
-               (println "unlisten for " collection-id (RuntimeException.))
-               (unlisten))))
+          (listen-collection!
+           source item-source-fn initial-collection collection-id
+           key render components-by-key))
 
     (h/out! "<" container-element-name
             (when (seq container-element-classes)
