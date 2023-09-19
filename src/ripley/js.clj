@@ -10,6 +10,7 @@
 
 (defn- wrap-success [fun]
   (case (arity fun)
+    0 (fn [] {:ripley/success (fun)})
     1 (fn [a] {:ripley/success (fun a)})
     2 (fn [a b] {:ripley/success (fun a b)})
     3 (fn [a b c] {:ripley/success (fun a b c)})
@@ -30,6 +31,7 @@
 
 (defn- wrap-failure [fun]
   (case (arity fun)
+    0 (fn [] (wrap-failure-call fun []))
     1 (fn [a] (wrap-failure-call fun [a]))
     2 (fn [a b] (wrap-failure-call fun [a b]))
     3 (fn [a b c] (wrap-failure-call fun [a b c]))
