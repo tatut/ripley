@@ -134,8 +134,12 @@ or db connection pools). The set of vars to capture must be configured when call
 
 ## Changes
 
+### 2023-09-20
+- Bugfix: proper live collection cleanup on long-lived source (like atom)
+
 ### 2023-09-19
 - Bugfix: support 0-arity callbacks when wrapping failure/success handlers
+
 ### 2023-09-16
 - Alternate server implementation support (with pedestal+jetty implementation)
 

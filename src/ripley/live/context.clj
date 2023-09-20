@@ -107,7 +107,8 @@
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
-    (let [component (bind bindings component)
+    (let [cleanup (:cleanup opts)
+          component (bind bindings component)
           parent-component-id dynamic/*component-id*
           {id :last-component-id}
           (swap! state
@@ -126,8 +127,8 @@
                       (update-in state [:components parent-component-id :children] conj id)
                       state)))]
       ;; Source may be missing (some parent components are registered without their own source)
-      ;; If source is present, add listener for it
-      (when source
+      ;; If source is present, add listener and unlisten cleanup for it
+      (if source
         (let [unlisten
               (p/listen!
                source
@@ -136,7 +137,15 @@
                         (merge
                          {:source source :component component}
                          (select-keys opts [:patch :parent :did-update :should-update?]))))]
-          (swap! state assoc-in [:components id :unlisten] unlisten)))
+          (swap! state assoc-in [:components id :unlisten]
+                 #(do (unlisten)
+                      ;; If cleanup specified, also call that
+                      (when cleanup
+                        (cleanup)))))
+
+        ;; Cleanup fn specified, but no source
+        (when cleanup
+          (swap! state assoc-in [:components id :unlisten] cleanup)))
       id))
 
   (register-callback! [_this callback]
@@ -179,9 +188,11 @@
     (when ping-task
       (.cancel ^Future ping-task false))
     (swap! current-live-contexts dissoc context-id)
-    (doseq [{source :source} (vals components)
-            :when source]
-      (p/close! source))
+    (doseq [[_id {:keys [source unlisten]}] components]
+      (when unlisten
+        (unlisten))
+      (when source
+        (p/close! source)))
     (doseq [c cleanup]
       (c))))
 
