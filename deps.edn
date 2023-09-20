@@ -23,6 +23,7 @@
   :manifold {:extra-deps {manifold/manifold {:mvn/version "0.1.9-alpha4"}}}
   :pedestal {:extra-deps {io.pedestal/pedestal.service {:mvn/version "0.6.0"}
                           io.pedestal/pedestal.jetty {:mvn/version "0.6.0"}}}
+  :undertow {:extra-deps {luminus/ring-undertow-adapter {:mvn/version "1.3.1"}}}
   :xtdb {:extra-deps {com.xtdb/xtdb-core {:mvn/version "1.24.1"}}}
 
   ;; Run with clj -T:build function-in-build
