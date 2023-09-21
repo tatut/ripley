@@ -134,6 +134,9 @@ or db connection pools). The set of vars to capture must be configured when call
 
 ## Changes
 
+### 2023-09-21
+- Add support for undertow server (thanks @zekzekus)
+
 ### 2023-09-20
 - Bugfix: proper live collection cleanup on long-lived source (like atom)
 

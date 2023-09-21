@@ -11,7 +11,7 @@
 (def basis
   (b/create-basis {:project "deps.edn"
                    ;; Add all optional dependencies as well, so cljdoc analysis succeeds
-                   :aliases [:manifold :redis :xtdb :pedestal]}))
+                   :aliases [:manifold :redis :xtdb :pedestal :undertow]}))
 
 (def jar-file "target/ripley.jar") ;(format "target/%s-%s.jar" (name lib) version)
 

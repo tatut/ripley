@@ -11,7 +11,7 @@
     (h/html
      [:html
       [:head
-       [:title "Ripley Pedestal WS example"]
+       [:title "Ripley Undertow WS example"]
        (h/live-client-script "/ws")]
       [:body
        [:div
