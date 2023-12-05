@@ -134,6 +134,9 @@ or db connection pools). The set of vars to capture must be configured when call
 
 ## Changes
 
+### 2023-12-05
+- Bugfix: handle callback arities correctly when using bindings and no success handler
+
 ### 2023-09-21
 - Add support for undertow server (thanks @zekzekus)
 
