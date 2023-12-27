@@ -134,6 +134,9 @@ or db connection pools). The set of vars to capture must be configured when call
 
 ## Changes
 
+### 2023-12-27
+- Bugfix: also cleanup source that is only used via other computed sources
+
 ### 2023-12-05
 - Bugfix: handle callback arities correctly when using bindings and no success handler
 
