@@ -190,7 +190,11 @@
   (listen! [_ listener]
     (deliver has-listener? true)
     (swap! listeners conj listener)
-    #(swap! listeners disj listener))
+    #(let [new-listeners (swap! listeners disj listener)]
+       ;; Call cleanup when the last listener has unlistened
+       (when (and (empty? new-listeners) cleanup-fn)
+         (cleanup-fn))))
+
   (close! [_]
     (reset! listeners #{})
     (when cleanup-fn
