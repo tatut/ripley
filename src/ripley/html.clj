@@ -615,7 +615,7 @@
                           (catch Throwable t#
                             [t# nil]))]
        (if err#
-         (component-error err# ~(pr-str original-body))
+         (component-error err# (quote ~original-body))
          (out! out#)))
 
     ;; If not in dev-mode, just catch and log error
