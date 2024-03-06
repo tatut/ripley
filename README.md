@@ -132,7 +132,21 @@ This can be used to avoid passing in every piece of context to all components (l
 or db connection pools). The set of vars to capture must be configured when calling
 `ripley.html/render-response`.
 
+### Dev mode
+
+In development mode, Ripley can be made to replace any `html` macro with an error description panel
+that shows exception information and the body source of the form.
+This has some performance penalty as all components will first be output into an in-memory `StringWriter`
+instead of directly to the response.
+
+Dev mode can be enabled with the system property argument `-Dripley.dev-mode=true` or by setting the
+`ripley.html/dev-mode?` atom to true before any `ripley.html/html` macroexpansions take place.
+
+
 ## Changes
+
+### 2024-03-06
+- Dev mode: replace component with an error display when an exception is thrown
 
 ### 2023-12-27
 - Bugfix: also cleanup source that is only used via other computed sources

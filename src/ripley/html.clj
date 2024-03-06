@@ -6,12 +6,22 @@
             [ripley.live.source :as source]
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
-            [ripley.impl.dynamic :as dynamic])
+            [ripley.impl.dynamic :as dynamic]
+            [clojure.tools.logging :as log])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
 
 (def ^:dynamic *raw-text-content* false)
+
+;; If dev-mode? is true, all html expansions will include
+;; an error handler that first writes to string and only
+;; outputs the component if it didn't throw an exception.
+;;
+;; If the component throws an exception, the exception
+;; info is output instead of the component.
+(defonce dev-mode?
+  (atom (= "true" (System/getProperty "ripley.dev-mode"))))
 
 (defn out! [& things]
   (doseq [thing things]
@@ -582,11 +592,37 @@
            combine-adjacent-out)))
    form))
 
-(defn- wrap-try [form]
-  `(try
-     ~form
-     (catch Throwable t#
-       (println "Exception in HTML rendering: " t#))))
+(defn component-error [ex body]
+  (let [pretty #(dyn! (with-out-str ((requiring-resolve 'clojure.pprint/pprint) %)))]
+    (out! "<div style=\"border: dotted 2px red; padding: 0.5rem;\" class=\"ripley-error\"> ")
+    (out! "<details><summary>Render exception: ")
+    (dyn! (ex-message ex))
+    (out! "</summary><pre style=\"white-space: pre-line;\" class=\"ripley-exception\">")
+    (dyn! (pretty ex))
+    (out! "</pre></details>")
+    (out! "<details>")
+    (out! "<summary>Component body</summary>")
+    (out! "<pre style=\"white-space: pre-line;\" class=\"ripley-source\">") (pretty body) (out! "</pre>")
+    (out! "</details>")
+    (out! "</div>")))
+
+(defn- wrap-try [original-body form]
+  (if @dev-mode?
+    `(let [[err# out#]  (try
+                          (binding [*html-out* (java.io.StringWriter.)]
+                            ~form
+                            [nil (str *html-out*)])
+                          (catch Throwable t#
+                            [t# nil]))]
+       (if err#
+         (component-error err# ~(pr-str original-body))
+         (out! out#)))
+
+    ;; If not in dev-mode, just catch and log error
+    `(try
+       ~form
+       (catch Throwable t#
+         (log/warn "Exception in HTML rendering: " t#)))))
 
 (defmacro html
   "Compile hiccup to HTML output."
@@ -594,7 +630,7 @@
   (->> body
        compile-html
        optimize
-       wrap-try))
+       (wrap-try body)))
 
 
 
