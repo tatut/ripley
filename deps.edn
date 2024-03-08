@@ -27,7 +27,7 @@
   :xtdb {:extra-deps {com.xtdb/xtdb-core {:mvn/version "1.24.1"}}}
 
   ;; Run with clj -T:build function-in-build
-  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.5" :git/sha "24f2894"}}
+  :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.6" :git/sha "8e78bcc"}}
           :ns-default build}
 
   ;; Deploy to clojars
