@@ -214,7 +214,7 @@
 
 (def boolean-attribute?
   "Attributes that are rendered without value"
-  #{:checked :selected :disabled :readonly :multiple :defer})
+  #{:checked :selected :disabled :readonly :multiple :defer :inert})
 
 (defn- register-live-attr [component-live-id attr live static-value]
   (let [{:keys [source component did-update]} (live-source-and-component live)

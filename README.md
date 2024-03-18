@@ -145,6 +145,9 @@ Dev mode can be enabled with the system property argument `-Dripley.dev-mode=tru
 
 ## Changes
 
+### 2024-03-18
+- Add `inert` boolean attribute
+
 ### 2024-03-06
 - Dev mode: replace component with an error display when an exception is thrown
 
