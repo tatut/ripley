@@ -3,7 +3,7 @@
     "tailwindcss": "^2.1.2"
   },
   "devDependencies": {
-    "postcss": "^8.2.13",
+    "postcss": "^8.4.31",
     "postcss-cli": "^8.3.1"
   }
 }
