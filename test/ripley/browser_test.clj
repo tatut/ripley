@@ -41,47 +41,63 @@
      (w/navigate "http://localhost:4455/")
      ~@test-body))
 
-
 (deftest counter-page
   (with-page
-    (let [[?count _set-count! swap-count!] (source/use-state 0)]
+      (let [[?count _set-count! swap-count!] (source/use-state 0)]
+        (h/html
+          [:div
+           [::h/live ?count
+            #(h/html
+               [:div.counter "Clicked " % " times."])]
+           [:button.inc {:on-click #(swap-count! inc)}
+            "click me"]]))
+
+      (is (w/wait-for (ws/text "Clicked 0 times.")))
+      (w/click :inc)
+      (is (w/wait-for (ws/text "Clicked 1 times.")))
+      (w/click :inc)
+      (is (w/wait-for (ws/text "Clicked 2 times.")))))
+
+(deftest after-replace
+  (with-page
+    (let [[?count _ swap-count!] (source/use-state 0)]
       (h/html
        [:div
+        [:script "window._COUNT = 0"]
         [::h/live ?count
-         #(h/html
-           [:div.counter "Clicked " % " times."])]
-        [:button.inc {:on-click #(swap-count! inc)}
-         "click me"]]))
+         #(h/html [:div {::h/after-replace "window._COUNT++"} "Clicked " % " times."])]
+        [:button.inc {:on-click #(swap-count! inc)} "click me"]]))
 
     (is (w/wait-for (ws/text "Clicked 0 times.")))
     (w/click :inc)
+
     (is (w/wait-for (ws/text "Clicked 1 times.")))
-    (w/click :inc)
-    (is (w/wait-for (ws/text "Clicked 2 times.")))))
+    (is (= 1 (.evaluate @w/*page* "window._COUNT"))
+        "after replace js was called")))
 
 (deftest indicator
   (with-page
-    (h/html
-     [:div "Click to load"
-      [:button.load {:on-click ["document.querySelector('.indicator').style.display=''"
-                                (-> #(do (Thread/sleep 1000) :ok)
-                                    (js/on-success "_=>document.querySelector('.indicator').style.display='none'"))]}
-       "load"]
-      [:div.indicator {:style "display: none;"} "Loading..."]])
+      (h/html
+        [:div "Click to load"
+         [:button.load {:on-click ["document.querySelector('.indicator').style.display=''"
+                                   (-> #(do (Thread/sleep 1000) :ok)
+                                       (js/on-success "_=>document.querySelector('.indicator').style.display='none'"))]}
+          "load"]
+         [:div.indicator {:style "display: none;"} "Loading..."]])
 
-    (is (not (w/visible? :indicator)))
-    (w/click :load)
-    (w/wait-for :indicator {:state :visible})
-    (w/wait-for :indicator {:state :hidden})))
+      (is (not (w/visible? :indicator)))
+      (w/click :load)
+      (w/wait-for :indicator {:state :visible})
+      (w/wait-for :indicator {:state :hidden})))
 
 (deftest error-callback
   (with-page
     (h/html
-     [:div "Click to do stuff"
-      [:button.do {:on-click (-> #(throw (ex-info "nope" {:not-going-to :happen}))
-                                 (js/on-failure "err=>document.querySelector('.error').innerText=err.message"))}
-       "do it"]
-      [:div.error]])
+      [:div "Click to do stuff"
+       [:button.do {:on-click (-> #(throw (ex-info "nope" {:not-going-to :happen}))
+                                  (js/on-failure "err=>document.querySelector('.error').innerText=err.message"))}
+        "do it"]
+       [:div.error]])
 
     (is (str/blank? (w/text-content :error)))
     (w/click :do)

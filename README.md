@@ -142,8 +142,17 @@ instead of directly to the response.
 Dev mode can be enabled with the system property argument `-Dripley.dev-mode=true` or by setting the
 `ripley.html/dev-mode?` atom to true before any `ripley.html/html` macroexpansions take place.
 
+### Client side state
+
+Ripley supports a custom attribute `::h/after-replace` in the component's root
+element. When the component is replaced when the source value changes, this
+JS fragment is evaluated after the DOM update. This can be used to reinitialize
+any client side scripts that are attached to this component.
 
 ## Changes
+
+### 2024-04-02
+- Add `::h/after-replace` attribute (see Client side state above)
 
 ### 2024-03-18
 - Add `inert` boolean attribute

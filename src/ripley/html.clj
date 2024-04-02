@@ -99,14 +99,18 @@
       (str/starts-with? attr "aria-")
       (str/starts-with? attr "x-")))
 
-(defn- html-attr-name [attr-name]
-  (let [name (name attr-name)]
-    (if (no-mangle-attribute? name)
-      ;; Keep attributes marked no mangle as is
-      name
+(def ^:private special-attribute
+  {::after-replace "data-rl-after-replace"})
 
-      ;; otherwise lowercase and remove dashes
-      (str/lower-case (str/replace name #"-" "")))))
+(defn- html-attr-name [attr-name]
+  (or (special-attribute attr-name)
+      (let [name (name attr-name)]
+        (if (no-mangle-attribute? name)
+          ;; Keep attributes marked no mangle as is
+          name
+
+          ;; otherwise lowercase and remove dashes
+          (str/lower-case (str/replace name #"-" ""))))))
 
 
 
