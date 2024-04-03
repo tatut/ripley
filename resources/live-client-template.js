@@ -166,7 +166,9 @@ window.ripley = {
                 eval(script.text+"")
             })
         }
-        if(elt.dataset.rlAfterReplace) eval(elt.dataset.rlAfterReplace);
+        if(elt.dataset.rlAfterReplace) {
+            new Function(elt.dataset.rlAfterReplace).bind(elt)();
+        }
     },
     P: function(elt, withContent) {
         elt.innerHTML = withContent+elt.innerHTML;
