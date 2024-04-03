@@ -147,9 +147,13 @@ Dev mode can be enabled with the system property argument `-Dripley.dev-mode=tru
 Ripley supports a custom attribute `::h/after-replace` in the component's root
 element. When the component is replaced when the source value changes, this
 JS fragment is evaluated after the DOM update. This can be used to reinitialize
-any client side scripts that are attached to this component.
+any client side scripts that are attached to this component. The DOM element that
+was replaced is bound to `this` during evaluation.
 
 ## Changes
+
+### 2024-04-03
+- Use new Function instead of eval for after replace JS code
 
 ### 2024-04-02
 - Add `::h/after-replace` attribute (see Client side state above)
