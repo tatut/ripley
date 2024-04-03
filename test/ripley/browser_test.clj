@@ -7,8 +7,10 @@
             [wally.selectors :as ws]
             [ripley.live.source :as source]
             [ripley.js :as js]
-            [clojure.test :refer [deftest is testing] :as t]
+            [clojure.test :refer [deftest is] :as t]
             [clojure.string :as str]))
+
+(reset! h/dev-mode? true)
 
 (defonce page (w/make-page {:headless true}))
 
@@ -102,3 +104,17 @@
     (is (str/blank? (w/text-content :error)))
     (w/click :do)
     (is (w/wait-for (ws/text "nope")))))
+
+(deftest dev-mode-exception
+  (with-page
+    (let [[?div set-div!] (source/use-state 2)]
+      (h/html
+       [:div "error component"
+        [::h/live ?div
+         #(h/html [:div "42 / " % " = " (h/dyn! (/ 42 %))])]
+        [:button.crash {:on-click #(set-div! 0)} "divide by zero"]]))
+
+    (is (w/wait-for (ws/text "42 / 2 = 21"))
+        "component initially rendered ok")
+    (w/click :crash)
+    (is (w/wait-for (ws/text "Render exception: Divide by zero")))))
