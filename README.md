@@ -152,6 +152,9 @@ was replaced is bound to `this` during evaluation.
 
 ## Changes
 
+### 2025-03-31
+- Fix: when the last listener of a computed source unlistens, close the source
+
 ### 2024-04-03
 - Use new Function instead of eval for after replace JS code
 

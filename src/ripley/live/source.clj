@@ -37,7 +37,10 @@
       (when (not= initial-value cv)
         (listener cv)))
     (swap! listeners conj listener)
-    #(swap! listeners disj listener))
+    #(let [new-listeners (swap! listeners disj listener)]
+       (when (empty? new-listeners)
+         (p/close! this))))
+
   (close! [_]
     (reset! listeners #{})
     ;; Don't close sources (they may have other listeners)
