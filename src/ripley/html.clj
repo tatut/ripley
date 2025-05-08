@@ -688,8 +688,9 @@
 
 (defn live-client-script
   ([path]
-   (live-client-script path :ws))
-  ([path connection-type]
+   (live-client-script path :connection-type :ws))
+  ([path & {:keys [connection-type replace-method]
+            :or {connection-type :ws}}]
    (assert (or (= connection-type :ws)
                (= connection-type :sse))
            "Supported connection types are WebSocket (:ws) and Server-Sent Events (:sse)")
@@ -697,4 +698,6 @@
     [:script
      (out! (str/replace @patch/live-client-script
                         "__TYPE__" (str "\"" (name connection-type) "\""))
+           (when replace-method
+             (str "\nripley.replaceMethod = " replace-method ";"))
            "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")])))
