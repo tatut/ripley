@@ -150,7 +150,25 @@ JS fragment is evaluated after the DOM update. This can be used to reinitialize
 any client side scripts that are attached to this component. The DOM element that
 was replaced is bound to `this` during evaluation.
 
+### Morph support
+
+Ripley by default patches components by setting the `outerHTML`, but in some
+cases you want to do morphing using a JS library like [Idiomorph](https://github.com/bigskysoftware/idiomorph).
+
+To make Ripley use a different replace method, pass it as a parameter to the live client script:
+
+```clojure
+(live-client-script "/_ws" :replace-method "Idiomorph.morph")
+```
+
+Any library can be used, but the function must take in 2 parameters: the node to be morphed and the new HTML content.
+
+Note that Ripley doesn't bundle any morphing library, include it in your page `<head>`.
+
 ## Changes
+
+### 2025-05-08
+- Support alternative replacement method (like Idiomorph)
 
 ### 2025-03-31
 - Fix: when the last listener of a computed source unlistens, close the source
