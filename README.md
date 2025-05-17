@@ -167,6 +167,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2025-05-17
+- Bugfix: standard boolean attributes are now omitted or rendered without value (eg. just `checked` or nothing instead of `checked="true"`)
+
 ### 2025-05-08
 - Support alternative replacement method (like Idiomorph)
 

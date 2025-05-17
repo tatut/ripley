@@ -311,8 +311,29 @@
                                       (:data-rl-class props)))
 
              ;; Style or other regular attribute
-             (if (= :style attr)
+             (cond
+               ;; special handling for style (which may have garden css)
+               (= :style attr)
                (compile-style val)
+
+               ;; boolean attribute
+               (boolean-attribute? attr)
+               (cond
+                 ;; statically known to be truthy
+                 (or (string? val) (true? val) (number? val) (keyword? val))
+                 `(out! ~(str " " html-attr))
+
+                 ;; statically known to be falsy
+                 (or (nil? val) (false? val))
+                 nil ; don't compile anything
+
+                 :else
+                 ;; not statically known, compile runtime check
+                 `(when ~val
+                    (out! ~(str " " html-attr))))
+
+               ;; other attributes
+               :else
                (if-let [static-value
                         (cond
                           (keyword? val) (name val)
