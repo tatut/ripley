@@ -255,7 +255,11 @@
                        :parent ~component-live-id
                        :did-update ~did-update})))))
 
-(def no-close-tag #{"input"})
+(def no-close-tag
+  "Void elements, that can't have children and no close tag."
+  #{"area" "base" "br" "col" "embed" "hr" "img" "input"
+    "link" "meta" "param" "source" "track" "wbr"})
+
 
 (def raw-text-content #{"script"})
 
