@@ -167,6 +167,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2025-12-03
+- Support multi use of a computed source with `:keep-alive? true`
+
 ### 2025-11-24
 - Bugfix: add all HTML void elements `no-close-tag` set
 

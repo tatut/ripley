@@ -27,9 +27,9 @@
     x
     (to-source x)))
 
-(defrecord ComputedSource [f initial-value unlisten-sources state listeners]
+(defrecord ComputedSource [opts f initial-value unlisten-sources cur-val listeners]
   p/Source
-  (current-value [_] (:value @state))
+  (current-value [_] (cur-val))
   (listen! [this listener]
     ;; Call listener immediately with the value, if the value
     ;; is different from the initial value
@@ -43,14 +43,15 @@
 
   (close! [_]
     (reset! listeners #{})
-    ;; Don't close sources (they may have other listeners)
-    ;; unregister our listeners from them
-    (doseq [unlisten unlisten-sources]
-      (unlisten)))
+    (when-not (:keep-alive? opts)
+      ;; Don't close sources (they may have other listeners)
+      ;; unregister our listeners from them
+      (doseq [unlisten unlisten-sources]
+        (unlisten))))
 
   Object
   (toString [_]
-    (str "#<computed f: " f ", " (count unlisten-sources) " sources")))
+    (str "#<computed f: " f ", " (count unlisten-sources) " sources>")))
 
 (defn computed
   "Returns new source whose value is computed from the value of
@@ -65,39 +66,42 @@
   of the sources changes, the function will be called.
   The function must have an arity that has the same amount
   of parameters as there are input sources.
-  The function must be pure and non blocking.
+  The function should be pure and non blocking.
 
   (computed + a b) will return a new source that
   calls + on the values of a and b sources when either
-  one changes."
-  [f & sources]
-  (let [sources (mapv source sources)
-        initial-input-values (mapv p/current-value sources)
-        initial-value (apply f initial-input-values)
-        state (atom {:input-values initial-input-values
-                     :value initial-value})
+  one changes.
+
+  Optionally first argument may be a map with:
+  :keep-alive?   if true, don't unlisten sources when component calls close
+                 Usually sources are closed when component unmounts.
+                 If new listeners are registered on rerender, the sources
+                 should not be unlistened."
+  [& opts-f-sources]
+  (let [[opts f & sources] (if (and (map? (first opts-f-sources))
+                                    (fn? (second opts-f-sources)))
+                             opts-f-sources
+                             (cons {} opts-f-sources))
+        sources (mapv source sources)
+        input-values (into-array Object (map p/current-value sources))
+        value (into-array Object [(apply f input-values)])
         listeners (atom #{})
-        update! (fn [i value]
-                  (let [old-value (:value @state)
-                        {new-value :value} (swap! state
-                                                  (fn [{:keys [input-values]}]
-                                                    (let [new-input-values (assoc input-values i value)
-                                                          new-value (apply f new-input-values)]
-                                                      {:input-values new-input-values
-                                                       :value new-value})))]
-                    (when (not= old-value new-value)
+        update! (fn computed-input-changed [i input-value]
+                  (aset input-values i input-value)
+                  (let [new-value (apply f input-values)]
+                    (when (not= (aget value 0) new-value)
+                      (aset value 0 new-value)
                       (doseq [listener @listeners]
                         (listener new-value)))))]
 
     (->ComputedSource
-     f
-     initial-value
+     opts f (aget value 0)
      ;; Add listeners for all input sources
      (doall
       (map-indexed (fn [i s]
                      (p/listen! s (partial update! i)))
                    sources))
-     state
+     #(aget value 0)
      listeners)))
 
 (defmacro c=
