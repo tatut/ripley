@@ -167,6 +167,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-02-02
+- Minor dev mode improvement: reuse component id in error message
+
 ### 2025-12-03
 - Support multi use of a computed source with `:keep-alive? true`
 

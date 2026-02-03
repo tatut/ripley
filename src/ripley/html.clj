@@ -621,9 +621,12 @@
            combine-adjacent-out)))
    form))
 
-(defn component-error [ex body]
+(defn component-error [ex body id]
   (let [pretty #(dyn! (with-out-str ((requiring-resolve 'clojure.pprint/pprint) %)))]
-    (out! "<div style=\"border: dotted 2px red; padding: 0.5rem;\" class=\"ripley-error\"> ")
+    (out! "<div")
+    (when id
+      (out! " data-rl=\"" id "\""))
+    (out! " style=\"border: dotted 2px red; padding: 0.5rem;\" class=\"ripley-error\"> ")
     (out! "<details><summary>Render exception: ")
     (dyn! (ex-message ex))
     (out! "</summary><pre style=\"white-space: pre-line;\" class=\"ripley-exception\">")
@@ -637,14 +640,17 @@
 
 (defn- wrap-try [original-body form]
   (if @dev-mode?
-    `(let [[err# out#]  (try
-                          (binding [*html-out* (java.io.StringWriter.)]
-                            ~form
-                            [nil (str *html-out*)])
-                          (catch Throwable t#
-                            [t# nil]))]
+    `(let [[err# out# id#] (binding [*html-out* (java.io.StringWriter.)]
+                             (try
+                               ~form
+                               [nil (str *html-out*) nil]
+                               (catch Throwable t#
+                                 [t# nil
+                                  ;; extract data-rl id from rendered (and use it in error)
+                                  (second (re-find #"data-rl=\"(\d+)\"" (str *html-out*)))])))]
        (if err#
-         (component-error err# (quote ~original-body))
+         (component-error err# (quote ~original-body) id#)
+
          (out! out#)))
 
     ;; If not in dev-mode, just catch and log error
