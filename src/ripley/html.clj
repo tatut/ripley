@@ -6,12 +6,22 @@
             [ripley.live.source :as source]
             [ripley.impl.output :refer [*html-out*]]
             [ripley.live.patch :as patch]
-            [ripley.impl.dynamic :as dynamic])
+            [ripley.impl.dynamic :as dynamic]
+            [clojure.tools.logging :as log])
   (:import (org.apache.commons.lang3 StringEscapeUtils)))
 
 (set! *warn-on-reflection* true)
 
 (def ^:dynamic *raw-text-content* false)
+
+;; If dev-mode? is true, all html expansions will include
+;; an error handler that first writes to string and only
+;; outputs the component if it didn't throw an exception.
+;;
+;; If the component throws an exception, the exception
+;; info is output instead of the component.
+(defonce dev-mode?
+  (atom (= "true" (System/getProperty "ripley.dev-mode"))))
 
 (defn out! [& things]
   (doseq [thing things]
@@ -89,14 +99,18 @@
       (str/starts-with? attr "aria-")
       (str/starts-with? attr "x-")))
 
-(defn- html-attr-name [attr-name]
-  (let [name (name attr-name)]
-    (if (no-mangle-attribute? name)
-      ;; Keep attributes marked no mangle as is
-      name
+(def ^:private special-attribute
+  {::after-replace "data-rl-after-replace"})
 
-      ;; otherwise lowercase and remove dashes
-      (str/lower-case (str/replace name #"-" "")))))
+(defn- html-attr-name [attr-name]
+  (or (special-attribute attr-name)
+      (let [name (name attr-name)]
+        (if (no-mangle-attribute? name)
+          ;; Keep attributes marked no mangle as is
+          name
+
+          ;; otherwise lowercase and remove dashes
+          (str/lower-case (str/replace name #"-" ""))))))
 
 (defn- event? [x]
   (and (vector? x)
@@ -228,7 +242,7 @@
 
 (def boolean-attribute?
   "Attributes that are rendered without value"
-  #{:checked :selected :disabled :readonly :multiple :defer})
+  #{:checked :selected :disabled :readonly :multiple :defer :inert})
 
 (defn- register-live-attr [component-live-id attr live static-value]
   (let [{:keys [source component did-update]} (live-source-and-component live)
@@ -265,7 +279,11 @@
                        :parent ~component-live-id
                        :did-update ~did-update})))))
 
-(def no-close-tag #{"input"})
+(def no-close-tag
+  "Void elements, that can't have children and no close tag."
+  #{"area" "base" "br" "col" "embed" "hr" "img" "input"
+    "link" "meta" "param" "source" "track" "wbr"})
+
 
 (def raw-text-content #{"script"})
 
@@ -321,8 +339,29 @@
                                       (:data-rl-class props)))
 
              ;; Style or other regular attribute
-             (if (= :style attr)
+             (cond
+               ;; special handling for style (which may have garden css)
+               (= :style attr)
                (compile-style val)
+
+               ;; boolean attribute
+               (boolean-attribute? attr)
+               (cond
+                 ;; statically known to be truthy
+                 (or (string? val) (true? val) (number? val) (keyword? val))
+                 `(out! ~(str " " html-attr))
+
+                 ;; statically known to be falsy
+                 (or (nil? val) (false? val))
+                 nil ; don't compile anything
+
+                 :else
+                 ;; not statically known, compile runtime check
+                 `(when ~val
+                    (out! ~(str " " html-attr))))
+
+               ;; other attributes
+               :else
                (if-let [static-value
                         (cond
                           (keyword? val) (name val)
@@ -606,11 +645,43 @@
            combine-adjacent-out)))
    form))
 
-(defn- wrap-try [form]
-  `(try
-     ~form
-     (catch Throwable t#
-       (println "Exception in HTML rendering: " t#))))
+(defn component-error [ex body id]
+  (let [pretty #(dyn! (with-out-str ((requiring-resolve 'clojure.pprint/pprint) %)))]
+    (out! "<div")
+    (when id
+      (out! " data-rl=\"" id "\""))
+    (out! " style=\"border: dotted 2px red; padding: 0.5rem;\" class=\"ripley-error\"> ")
+    (out! "<details><summary>Render exception: ")
+    (dyn! (ex-message ex))
+    (out! "</summary><pre style=\"white-space: pre-line;\" class=\"ripley-exception\">")
+    (dyn! (pretty ex))
+    (out! "</pre></details>")
+    (out! "<details>")
+    (out! "<summary>Component body</summary>")
+    (out! "<pre style=\"white-space: pre-line;\" class=\"ripley-source\">") (pretty body) (out! "</pre>")
+    (out! "</details>")
+    (out! "</div>")))
+
+(defn- wrap-try [original-body form]
+  (if @dev-mode?
+    `(let [[err# out# id#] (binding [*html-out* (java.io.StringWriter.)]
+                             (try
+                               ~form
+                               [nil (str *html-out*) nil]
+                               (catch Throwable t#
+                                 [t# nil
+                                  ;; extract data-rl id from rendered (and use it in error)
+                                  (second (re-find #"data-rl=\"(\d+)\"" (str *html-out*)))])))]
+       (if err#
+         (component-error err# (quote ~original-body) id#)
+
+         (out! out#)))
+
+    ;; If not in dev-mode, just catch and log error
+    `(try
+       ~form
+       (catch Throwable t#
+         (log/warn "Exception in HTML rendering: " t#)))))
 
 (defmacro html
   "Compile hiccup to HTML output."
@@ -618,7 +689,7 @@
   (->> body
        compile-html
        optimize
-       wrap-try))
+       (wrap-try body)))
 
 
 
@@ -676,8 +747,9 @@
 
 (defn live-client-script
   ([path]
-   (live-client-script path :ws))
-  ([path connection-type]
+   (live-client-script path :connection-type :ws))
+  ([path & {:keys [connection-type replace-method]
+            :or {connection-type :ws}}]
    (assert (or (= connection-type :ws)
                (= connection-type :sse))
            "Supported connection types are WebSocket (:ws) and Server-Sent Events (:sse)")
@@ -685,4 +757,6 @@
     [:script
      (out! (str/replace @patch/live-client-script
                         "__TYPE__" (str "\"" (name connection-type) "\""))
+           (when replace-method
+             (str "\nripley.replaceMethod = " replace-method ";"))
            "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")])))

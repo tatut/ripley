@@ -10,3 +10,6 @@
 /target/
 /.lsp/
 /.clj-kondo/
+.wally/
+*.clj-kondo/
+*.lsp/

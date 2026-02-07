@@ -154,7 +154,85 @@ This can be used to avoid passing in every piece of context to all components (l
 or db connection pools). The set of vars to capture must be configured when calling
 `ripley.html/render-response`.
 
+### Dev mode
+
+In development mode, Ripley can be made to replace any `html` macro with an error description panel
+that shows exception information and the body source of the form.
+This has some performance penalty as all components will first be output into an in-memory `StringWriter`
+instead of directly to the response.
+
+Dev mode can be enabled with the system property argument `-Dripley.dev-mode=true` or by setting the
+`ripley.html/dev-mode?` atom to true before any `ripley.html/html` macroexpansions take place.
+
+### Client side state
+
+Ripley supports a custom attribute `::h/after-replace` in the component's root
+element. When the component is replaced when the source value changes, this
+JS fragment is evaluated after the DOM update. This can be used to reinitialize
+any client side scripts that are attached to this component. The DOM element that
+was replaced is bound to `this` during evaluation.
+
+### Morph support
+
+Ripley by default patches components by setting the `outerHTML`, but in some
+cases you want to do morphing using a JS library like [Idiomorph](https://github.com/bigskysoftware/idiomorph).
+
+To make Ripley use a different replace method, pass it as a parameter to the live client script:
+
+```clojure
+(live-client-script "/_ws" :replace-method "Idiomorph.morph")
+```
+
+Any library can be used, but the function must take in 2 parameters: the node to be morphed and the new HTML content.
+
+Note that Ripley doesn't bundle any morphing library, include it in your page `<head>`.
+
 ## Changes
+
+### 2026-02-02
+- Minor dev mode improvement: reuse component id in error message
+
+### 2025-12-03
+- Support multi use of a computed source with `:keep-alive? true`
+
+### 2025-11-24
+- Bugfix: add all HTML void elements `no-close-tag` set
+
+### 2025-05-17
+- Bugfix: standard boolean attributes are now omitted or rendered without value (eg. just `checked` or nothing instead of `checked="true"`)
+
+### 2025-05-08
+- Support alternative replacement method (like Idiomorph)
+
+### 2025-03-31
+- Fix: when the last listener of a computed source unlistens, close the source
+
+### 2024-04-03
+- Use new Function instead of eval for after replace JS code
+
+### 2024-04-02
+- Add `::h/after-replace` attribute (see Client side state above)
+
+### 2024-03-18
+- Add `inert` boolean attribute
+
+### 2024-03-06
+- Dev mode: replace component with an error display when an exception is thrown
+
+### 2023-12-27
+- Bugfix: also cleanup source that is only used via other computed sources
+
+### 2023-12-05
+- Bugfix: handle callback arities correctly when using bindings and no success handler
+
+### 2023-09-21
+- Add support for undertow server (thanks @zekzekus)
+
+### 2023-09-20
+- Bugfix: proper live collection cleanup on long-lived source (like atom)
+
+### 2023-09-19
+- Bugfix: support 0-arity callbacks when wrapping failure/success handlers
 
 ### 2023-09-16
 - Alternate server implementation support (with pedestal+jetty implementation)

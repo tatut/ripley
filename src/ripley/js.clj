@@ -10,14 +10,15 @@
 
 (defn- wrap-success [fun]
   (case (arity fun)
-    1 (fn [a] {:ripley/success (fun a)})
-    2 (fn [a b] {:ripley/success (fun a b)})
-    3 (fn [a b c] {:ripley/success (fun a b c)})
-    4 (fn [a b c d] {:ripley/success (fun a b c d)})
-    5 (fn [a b c d e] {:ripley/success (fun a b c d e)})
-    6 (fn [a b c d e f] {:ripley/success (fun a b c d e f)})
-    7 (fn [a b c d e f g] {:ripley/success (fun a b c d e f g)})
-    (fn [& args]
+    0 (fn wrap-success-0 [] {:ripley/success (fun)})
+    1 (fn wrap-success-1 [a] {:ripley/success (fun a)})
+    2 (fn wrap-success-2 [a b] {:ripley/success (fun a b)})
+    3 (fn wrap-success-3 [a b c] {:ripley/success (fun a b c)})
+    4 (fn wrap-success-4 [a b c d] {:ripley/success (fun a b c d)})
+    5 (fn wrap-success-5 [a b c d e] {:ripley/success (fun a b c d e)})
+    6 (fn wrap-success-6 [a b c d e f] {:ripley/success (fun a b c d e f)})
+    7 (fn wrap-success-7 [a b c d e f g] {:ripley/success (fun a b c d e f g)})
+    (fn wrap-success-n [& args]
       {:ripley/success (apply fun args)})))
 
 (defn- wrap-failure-call [fun args]
@@ -30,22 +31,35 @@
 
 (defn- wrap-failure [fun]
   (case (arity fun)
-    1 (fn [a] (wrap-failure-call fun [a]))
-    2 (fn [a b] (wrap-failure-call fun [a b]))
-    3 (fn [a b c] (wrap-failure-call fun [a b c]))
-    4 (fn [a b c d] (wrap-failure-call fun [a b c d]))
-    5 (fn [a b c d e] (wrap-failure-call fun [a b c d e]))
-    6 (fn [a b c d e f] (wrap-failure-call fun [a b c d e f]))
-    7 (fn [a b c d e f g] (wrap-failure-call fun [a b c d e f g]))
-    (fn [& args] (wrap-failure-call fun args))))
+    0 (fn wrap-failure-0 [] (wrap-failure-call fun []))
+    1 (fn wrap-failure-1 [a] (wrap-failure-call fun [a]))
+    2 (fn wrap-failure-2 [a b] (wrap-failure-call fun [a b]))
+    3 (fn wrap-failure-3 [a b c] (wrap-failure-call fun [a b c]))
+    4 (fn wrap-failure-4 [a b c d] (wrap-failure-call fun [a b c d]))
+    5 (fn wrap-failure-5 [a b c d e] (wrap-failure-call fun [a b c d e]))
+    6 (fn wrap-failure-6 [a b c d e f] (wrap-failure-call fun [a b c d e f]))
+    7 (fn wrap-failure-7 [a b c d e f g] (wrap-failure-call fun [a b c d e f g]))
+    (fn wrap-failure-n [& args] (wrap-failure-call fun args))))
+
+(defn- wrap-ignore-success-call [fun args]
+  (apply fun args)
+  {:ripley/success true})
 
 ;; For cases there exists a failure handler, but no success handler
 ;; and the callback doesn't fail... we still need to notify client
 ;; so that it removes the handler from its state.
 (defn wrap-ignore-success [fun]
-  (fn [& args]
-    (apply fun args)
-    {:ripley/success true}))
+  (case (arity fun)
+    0 (fn wrap-ignore-success-0 [] (wrap-ignore-success-call fun []))
+    1 (fn wrap-ignore-success-1 [a] (wrap-ignore-success-call fun [a]))
+    2 (fn wrap-ignore-success-2 [a b] (wrap-ignore-success-call fun [a b]))
+    3 (fn wrap-ignore-success-3 [a b c] (wrap-ignore-success-call fun [a b c]))
+    4 (fn wrap-ignore-success-4 [a b c d] (wrap-ignore-success-call fun [a b c d]))
+    5 (fn wrap-ignore-success-5 [a b c d e] (wrap-ignore-success-call fun [a b c d e]))
+    6 (fn wrap-ignore-success-6 [a b c d e f] (wrap-ignore-success-call fun [a b c d e f]))
+    7 (fn wrap-ignore-success-7 [a b c d e f g] (wrap-ignore-success-call fun [a b c d e f g]))
+    (fn [& args]
+      (wrap-ignore-success-call fun args))))
 
 (defrecord JSCallback [callback-fn condition js-params debounce-ms
                        on-success on-failure]
