@@ -140,7 +140,6 @@
     (satisfies? p/Callback callback)
     (let [cfn (p/callback-fn callback)
           e? (event? cfn)
-          _ (println "is " (pr-str cfn) " an event? " e?)
           invoke-callback-js (str "_rs("
                                   (if e?
                                     (event-callback-id cfn)
