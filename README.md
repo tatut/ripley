@@ -45,11 +45,11 @@ function is called with the value received from the source.
     [:div
       "Counter value: " [::h/live {:source (atom-source counter)
                                    :component #(h/html [:span %])}]
-      [:button {:on-click #(swap! counter inc)} "increment"]
-      [:button {:on-click #(swap! counter dec)} "decrement"]]))
+      [:button {:onclick #(swap! counter inc)} "increment"]
+      [:button {:onclick #(swap! counter dec)} "decrement"]]))c
 ```
 
-All event handling attributes (like `:on-click` or `:on-change`) are registered as callbacks
+All event handling attributes (like `:onclick` or `:onchange`) are registered as callbacks
 that are sent via the websocket to the server. See `ripley.js` namespace for helpers in creating
 callbacks with more options. You can add debouncing and client side condition and success/failure
 handlers.
@@ -65,6 +65,28 @@ and allows the live context to listen for changes.
 The source value can be an atomic value (like string, number or boolean) or
 a map or collection. The interpretation of the value of the source if entirely
 up to the component that is being rendered.
+
+## Callbacks vs events
+
+Ripley supports two ways to send data from browser to backend: callbacks and events.
+
+Callbacks can be any Clojure function and are registered at component render time.
+Events are Clojure vectors where the first element is a keyword that names the type of the event.
+Both can have arguments that are evaluated in the browser, like getting input field
+values.
+
+With callbacks, any backend resources (like db handles) they need, must be passed in as arguments or
+dynamically bound. This can cause "prop drilling" which makes component signatures unwieldy.
+
+Events allow you to pass a single event handler method at page render time.
+The handler can be a closure that includes everything needed.
+The handler is invoked for any events received.
+
+Event handlers can also interact with JS side by returning events that are
+dispatched based on `ripley.event` handler map.
+
+See the [counter example](examples/counter/src/counter/main.clj) for a working
+example of using events.
 
 
 ### Built-in sources

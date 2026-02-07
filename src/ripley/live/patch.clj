@@ -129,6 +129,12 @@ for(let i=1;i<payload.length;i++) {
    :render-mode :json
    :js-eval "ripley.handleResult('onsuccess',payload[0], payload[1]);"})
 
+(define-patch-method event
+  "Invoke client side event handler."
+  {:type "ET"
+   :render-mode :json
+   :js-eval "const ET = payload[0]; ripley.event[ET].apply(null, payload.splice(1));"})
+
 (def live-client-script
   (delay
     (-> "live-client-template.js" io/resource slurp

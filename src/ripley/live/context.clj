@@ -103,7 +103,7 @@
         7 (fn [a b c d e f g] (with-bindings current-bindings (function a b c d e f g)))
         (fn [& args] (with-bindings (apply function args)))))))
 
-(defrecord DefaultLiveContext [state bindings]
+(defrecord DefaultLiveContext [state bindings event-handler]
   p/LiveContext
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
@@ -211,15 +211,21 @@
     (and (empty? components)
          (empty? callbacks))))
 
+(defn- no-event-handler-defined [event]
+  (when-not (#{:ripley/connected :ripley/disconnected} (first event))
+    (log/error "Received event from client, but no event-handler is defined." event)))
+
 (defn render-with-context
   "Return input stream that calls render-fn with a new live context bound."
   ([render-fn]
    (render-with-context render-fn {}))
-  ([render-fn {:keys [bindings]
-               :or {bindings #{}} :as _context-options}]
+  ([render-fn {:keys [bindings event-handler]
+               :or {bindings #{}
+                    event-handler no-event-handler-defined}
+               :as _context-options}]
    (let [{id :context-id :as initial-state} (initial-context-state)
          state (atom initial-state)
-         ctx (->DefaultLiveContext state bindings)]
+         ctx (->DefaultLiveContext state bindings event-handler)]
      (swap! current-live-contexts assoc id ctx)
      (ring-io/piped-input-stream
       (fn [out]
@@ -232,7 +238,7 @@
                 (log/error t "Exception while rendering!"))
               (finally
                 (if (empty-context? ctx)
-                 ;; No live components  rendered or callbacks registered, remove context immediately
+                  ;; No live components  rendered or callbacks registered, remove context immediately
                   (do
                     (log/debug "No live components, remove context with id: " id)
                     (swap! current-live-contexts dissoc id))
@@ -259,6 +265,18 @@
       {:status 404
        :body "Unknown callback"})))
 
+(defn- handle-event [ctx send! event]
+  (try
+    (dynamic/with-live-context ctx
+      (let [res ((:event-handler ctx) event)]
+        (when-let [events (and (map? res)
+                               (:events res))]
+          (send! (cheshire/encode
+                  (for [e events]
+                    (into [nil "ET" e])))))))
+    (catch Throwable t
+      (log/error t "Uncaught exception while processing event"))))
+
 (defn initialize-connection
   "Initialize a connection for the given live context id and send function.
   The [[send!]] function must have arity of 1 that takes a (String) data to
@@ -274,26 +292,38 @@
       (throw (ex-info "Unknown live context" {:context-id context-id}))
       (reify p/ConnectionCallbacks
         (on-close [_ _status]
+          (handle-event ctx :_ignore
+                        [:ripley/disconnected ctx])
           (cleanup-ctx ctx))
         (on-receive [_ data]
           (if (= data "!")
             (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
-            (let [[id args reply-id] (cheshire/decode data keyword)
-                  callback (some-> ctx :state deref :callbacks (get id))]
-              (if-not callback
-                (log/debug "Got callback with unrecognized id: " id)
-                (try
-                  (dynamic/with-live-context ctx
-                    (let [res (apply callback args)]
-                      (when-let [reply (and reply-id (map? res) (:ripley/success res))]
-                        (send! (cheshire/encode [(patch/callback-success [reply-id reply])])))))
-                  (catch Throwable t
-                    (if-let [reply (and reply-id (:ripley/failure (ex-data t))
-                                        (merge {:message (.getMessage t)}
-                                               (dissoc (ex-data t) :ripley/failure)))]
-                      (send! (cheshire/encode [(patch/callback-error [reply-id reply])]))
-                      ;; No on-failure reply was requested, log this as an uncaught
-                      (log/error t "Uncaught exception while processing callback"))))))))
+            (let [msg-data (cheshire/decode data keyword)]
+              (if-not (vector? msg-data)
+                (log/debug "Got unrecognized messaga from client: " msg-data)
+                (if (= "ET" (first msg-data))
+                  ;; turn message like ["E" "foo" "arg1" 42]
+                  ;; into [:foo "arg1" 42] and apply event handler
+                  (handle-event ctx send! (-> msg-data (subvec 1) (update 0 keyword)))
+
+                  ;; Process callback
+                  (let [[id args reply-id] msg-data
+                        callback (some-> ctx :state deref :callbacks (get id))]
+
+                    (if-not callback
+                      (log/debug "Got callback with unrecognized id: " id)
+                      (try
+                        (dynamic/with-live-context ctx
+                          (let [res (apply callback args)]
+                            (when-let [reply (and reply-id (map? res) (:ripley/success res))]
+                              (send! (cheshire/encode [(patch/callback-success [reply-id reply])])))))
+                        (catch Throwable t
+                          (if-let [reply (and reply-id (:ripley/failure (ex-data t))
+                                              (merge {:message (.getMessage t)}
+                                                     (dissoc (ex-data t) :ripley/failure)))]
+                            (send! (cheshire/encode [(patch/callback-error [reply-id reply])]))
+                            ;; No on-failure reply was requested, log this as an uncaught
+                            (log/error t "Uncaught exception while processing callback")))))))))))
         (on-open [_]
           (let [{send-queue :send-queue}
                 (swap! (:state ctx) assoc
@@ -310,7 +340,9 @@
                       (assoc
                        :ping-task (when ping-interval
                                     (schedule-ping send! ping-interval))
-                       :status :connected))))))))
+                       :status :connected)))
+          ;; send connected event
+          (handle-event ctx send! [:ripley/connected ctx]))))))
 
 (defn connection-handler
   "Create a handler that initiates WebSocket (or SSE) connection with ripley server

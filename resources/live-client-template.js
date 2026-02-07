@@ -7,6 +7,7 @@ window.ripley = {
     debounceTimeout: {},
     callbackHandlers: {},
     nextCallbackId: 0,
+    event: {},
     get: function(id) {
         return document.querySelector("[data-rl='"+id+"']");
     },
@@ -39,7 +40,9 @@ window.ripley = {
         } else if(this.type === "ws") {
             let cid;
             let msg;
-            if(onsuccess !== undefined || onfailure !== undefined) {
+            if(typeof(id)==="object") {
+                msg = ["ET", id.ET, ...args];
+            } else if(onsuccess !== undefined || onfailure !== undefined) {
                 cid = this.nextCallbackId;
                 this.nextCallbackId++;
                 msg = [id, args, cid];

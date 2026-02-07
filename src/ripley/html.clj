@@ -98,20 +98,44 @@
       ;; otherwise lowercase and remove dashes
       (str/lower-case (str/replace name #"-" "")))))
 
+(defn- event? [x]
+  (and (vector? x)
+       (keyword? (first x))))
 
+(defn- event-arg [x]
+  (if (keyword? x)
+    (str "'" (name x) "'")
+    (str x)))
+
+(defn- event-callback-id [x]
+  (str "{ET:'" (name (first x)) "'}"))
 
 (defn register-callback [callback]
   (cond
+    ;; Event (vector with keyword as first value)
+    (event? callback)
+    (str "_rs(" (event-callback-id callback) ", ["
+         (str/join "," (map event-arg (rest callback)))
+         "])")
+
     ;; Multiple values, join by semicolon
     (vector? callback)
     (str/join ";" (map register-callback callback))
 
     ;; A callback record
     (satisfies? p/Callback callback)
-    (let [invoke-callback-js (str "_rs("
-                                  (p/register-callback! dynamic/*live-context*
-                                                        (p/callback-fn callback))
-                                  ",[" (str/join "," (p/callback-js-params callback)) "]"
+    (let [cfn (p/callback-fn callback)
+          e? (event? cfn)
+          _ (println "is " (pr-str cfn) " an event? " e?)
+          invoke-callback-js (str "_rs("
+                                  (if e?
+                                    (event-callback-id cfn)
+                                    (p/register-callback! dynamic/*live-context*
+                                                          (p/callback-fn callback)))
+                                  ",[" (str/join ","
+                                                 (if e?
+                                                   (map event-arg (rest cfn))
+                                                   (p/callback-js-params callback))) "]"
                                   "," (or (p/callback-debounce-ms callback) "undefined")
                                   "," (or (p/callback-on-success callback) "undefined")
                                   "," (or (p/callback-on-failure callback) "undefined")
@@ -631,6 +655,10 @@
               the component is rerended or the callback invoked. This makes it
               possible to use dynamic scope (like user info, db pools etc)
               and not need to pass everything as input parameters to components.
+
+  :event-handler
+              A function to invoke when client sends events.
+              Events are alternatives to callback functions.
 "
   ([render-fn] (render-response {} render-fn))
   ([response-map render-fn]
