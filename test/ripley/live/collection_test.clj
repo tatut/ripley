@@ -12,7 +12,8 @@
   (context/->DefaultLiveContext
    (atom (merge (context/initial-context-state)
                 {:send! #(async/>!! sent-ch %)}))
-   {}))
+   {}
+   context/no-event-handler-defined))
 
 (defmacro with-html-out-str [& body]
   `(let [out# (java.io.StringWriter.)]

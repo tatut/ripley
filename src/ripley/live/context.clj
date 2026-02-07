@@ -222,7 +222,7 @@
     (and (empty? components)
          (empty? callbacks))))
 
-(defn- no-event-handler-defined [event]
+(defn no-event-handler-defined [event]
   (when-not (#{:ripley/connected :ripley/disconnected} (first event))
     (log/error "Received event from client, but no event-handler is defined." event)))
 
