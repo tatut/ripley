@@ -310,7 +310,7 @@
           (if (= data "!")
             (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
             (let [msg-data (cheshire/decode data keyword)]
-              (if-not (vector? msg-data)
+              (if-not (sequential? msg-data)
                 (log/debug "Got unrecognized messaga from client: " msg-data)
                 (if (= "ET" (first msg-data))
                   ;; turn message like ["E" "foo" "arg1" 42]
@@ -320,7 +320,6 @@
                   ;; Process callback
                   (let [[id args reply-id] msg-data
                         callback (some-> ctx :state deref :callbacks (get id))]
-
                     (if-not callback
                       (log/debug "Got callback with unrecognized id: " id)
                       (try

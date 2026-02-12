@@ -189,6 +189,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-02-12
+- Bugfix: don't depend on cheshire returning vector
+
 ### 2026-02-07
 - Feature: events as alternative to callbacks
 
