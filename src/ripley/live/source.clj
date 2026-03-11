@@ -38,16 +38,16 @@
         (listener cv)))
     (swap! listeners conj listener)
     #(let [new-listeners (swap! listeners disj listener)]
-       (when (empty? new-listeners)
+       ;; Close this source only if it is not marked keep-alive and
+       ;; there are no more down stream listeners.
+       (when (and (not (:keep-alive? opts))
+                  (empty? new-listeners))
          (p/close! this))))
 
   (close! [_]
     (reset! listeners #{})
-    (when-not (:keep-alive? opts)
-      ;; Don't close sources (they may have other listeners)
-      ;; unregister our listeners from them
-      (doseq [unlisten unlisten-sources]
-        (unlisten))))
+    (doseq [unlisten unlisten-sources]
+      (unlisten)))
 
   Object
   (toString [_]
