@@ -26,7 +26,7 @@ Cons:
 
 ## Usage
 
-Using ripley is from a regular ring app is easy. You call `ripley.html/render-response` from a ring
+Using ripley from a regular ring app is easy. You call `ripley.html/render-response` from a ring
 handler to create a response that sets up a live context.
 
 The render response takes a root component that will render the page.
