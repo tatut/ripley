@@ -189,6 +189,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-04-07
+- Bugfix: use rest & vec to coerce event data
+
 ### 2026-03-11
 - Bugfix: computed source having keep-alive?, still close it on context cleanup
 

@@ -311,11 +311,11 @@
             (swap! (:state ctx) assoc :last-ping-received (System/currentTimeMillis))
             (let [msg-data (cheshire/decode data keyword)]
               (if-not (sequential? msg-data)
-                (log/debug "Got unrecognized messaga from client: " msg-data)
+                (log/debug "Got unrecognized message from client: " msg-data)
                 (if (= "ET" (first msg-data))
-                  ;; turn message like ["E" "foo" "arg1" 42]
+                  ;; turn message like ["ET" "foo" "arg1" 42]
                   ;; into [:foo "arg1" 42] and apply event handler
-                  (handle-event ctx send! (-> msg-data (subvec 1) (update 0 keyword)))
+                  (handle-event ctx send! (-> msg-data rest vec (update 0 keyword)))
 
                   ;; Process callback
                   (let [[id args reply-id] msg-data
