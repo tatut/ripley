@@ -67,6 +67,7 @@ window.ripley = {
         q.length = 0;
     },
     connect: function(path, id) {
+        ripley.__connection_id = id;
         var l = window.location;
         if(this.type === "sse") {
             var url = l.protocol+"//"+l.host+path+"?id="+id;
@@ -81,6 +82,7 @@ window.ripley = {
             this.connection.onmessage = this.onmessage.bind(this);
             this.connection.onopen = this.onopen.bind(this);
             this.connection.onclose = this.onclose.bind(this);
+            this.connection.onerror = this.onerror.bind(this);
         } else {
             console.error("Unknown connection type: ", this.type);
         }
@@ -101,6 +103,9 @@ window.ripley = {
                 elt.setAttribute(attr,value);
             }
         }
+    },
+    onerror: function(err) {
+        console.error(err);
     },
     onmessage: function(msg) {
         if(this.debug) console.log("Received:", msg);

@@ -24,25 +24,33 @@
                ch* (object-array 1)
                send! (partial send-fn! (delay (aget ch* 0)))
                callbacks (initialize-connection id send!)]
-           (server/as-channel
-            req
-            {:on-open
-             (fn [ch]
-               (aset ch* 0 ch)
-               (log/debug "Connected, ws? " (server/websocket? ch))
-               ;; If connection is not WebSocket, initialize SSE headers
-               (when-not (server/websocket? ch)
-                 (server/send! ch {:status 200
-                                   :headers {"Content-Type" "text/event-stream"}}
-                               false))
-               (p/on-open callbacks))
+           (if (= :ripley/duplicate callbacks)
+             ;; Send special JS to eval app specific duplication handler
+             (server/as-channel
+              req {:on-open (fn [ch]
+                              (server/send!
+                               ch
+                               "[[null,\"E\",\"ripley_duplicate()\"]]"
+                               true))})
+             (server/as-channel
+              req
+              {:on-open
+               (fn [ch]
+                 (aset ch* 0 ch)
+                 (log/debug "Connected, ws? " (server/websocket? ch))
+                 ;; If connection is not WebSocket, initialize SSE headers
+                 (when-not (server/websocket? ch)
+                   (server/send! ch {:status 200
+                                     :headers {"Content-Type" "text/event-stream"}}
+                                 false))
+                 (p/on-open callbacks))
 
-             :on-close
-             (fn [_ch status]
-               (p/on-close callbacks status))
+               :on-close
+               (fn [_ch status]
+                 (p/on-close callbacks status))
 
-             :on-receive
-             (fn [_ch ^String data]
-               (p/on-receive callbacks data))}))
+               :on-receive
+               (fn [_ch ^String data]
+                 (p/on-receive callbacks data))})))
          (catch Exception e
            (log/error e "Unable to initialize live context")))))))

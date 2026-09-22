@@ -2,6 +2,8 @@
   "Protocols for live components.")
 
 (defprotocol LiveContext
+  (live-context-id [this]
+    "Get the UUID of this live context.")
   (register! [this source component opts]
     "Register new live component in this context. Must return id for component.")
   (register-callback! [this callback]

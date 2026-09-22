@@ -189,6 +189,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-09-22
+- Support `:reject-duplicate` connection to facilitate browser 'duplicate tab' handling
+
 ### 2026-04-07
 - Bugfix: use rest & vec to coerce event data
 

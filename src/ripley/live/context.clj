@@ -105,6 +105,8 @@
 
 (defrecord DefaultLiveContext [state bindings event-handler]
   p/LiveContext
+  (live-context-id [_]
+    (get @state :context-id))
   (register! [this source component opts]
     ;; context is per rendered page, so will be registrations will be called from a single thread
     (let [cleanup (:cleanup opts)
@@ -297,10 +299,17 @@
 
   Returns an instance of Callbacks which the caller must configure on the
   underlying connection."
-  [{:keys [ping-interval]} context-id send!]
-  (let [ctx (get @current-live-contexts context-id)]
-    (if-not ctx
-      (throw (ex-info "Unknown live context" {:context-id context-id}))
+  [{:keys [ping-interval reject-duplicate]} context-id send!]
+  (let [ctx (get @current-live-contexts context-id)
+        status (some-> ctx :state deref :status)]
+    (cond
+      (not ctx)
+      (throw (ex-info (str "Unknown live context" context-id) {:context-id context-id}))
+
+      (and (= status :connected) reject-duplicate)
+      :ripley/duplicate
+
+      :else
       (reify p/ConnectionCallbacks
         (on-close [_ _status]
           (handle-event ctx :_ignore
@@ -365,6 +374,12 @@
   :ping-interval  Ping interval seconds. If specified, send ping message to client periodically.
                   This can facilitate keeping alive connections when load balancers have some
                   idle timeout.
+  :reject-duplicate
+                  If user uses browser 'duplicate tab' which create a new connection
+                  to the same live context id.
+                  When this options is set to true, the WebSocket connection
+                  will be send a special message to facilitate application
+                  specific handling on the frontend side.
 
   See other server implementation ns for possible other options.
   "
