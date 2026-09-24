@@ -57,6 +57,9 @@ window.ripley = {
     },
     onopen: function(e) {
         this.connected = true;
+        if(typeof(ripley_connected)==="function") {
+            ripley_connected();
+        }
         let q = this.preOpenQueue;
         let c = this.connection;
         for(var i = 0; i<q.length; i++) {
@@ -67,6 +70,9 @@ window.ripley = {
         q.length = 0;
     },
     connect: function(path, id) {
+        if(typeof(ripley_preconnect)==='function') {
+            if(!ripley_preconnect(id)) return;
+        }
         ripley.__connection_id = id;
         var l = window.location;
         if(this.type === "sse") {

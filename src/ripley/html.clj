@@ -758,4 +758,4 @@
                         "__TYPE__" (str "\"" (name connection-type) "\""))
            (when replace-method
              (str "\nripley.replaceMethod = " replace-method ";"))
-           "\ndocument.onload = ripley.connect('" path "', '" (str (context/current-context-id)) "');")])))
+           "\nwindow.addEventListener('load', function(_e) { ripley.connect('" path "', '" (str (context/current-context-id)) "'); });")])))

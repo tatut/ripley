@@ -189,6 +189,10 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-09-24
+- Support `ripley_preconnect` and `ripley_connected` callbacks
+- Use `window.addEventListener` instead of `onload` attribute
+
 ### 2026-09-22
 - Support `:reject-duplicate` connection to facilitate browser 'duplicate tab' handling
 
