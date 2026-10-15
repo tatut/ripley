@@ -189,6 +189,9 @@ Note that Ripley doesn't bundle any morphing library, include it in your page `<
 
 ## Changes
 
+### 2026-10-15
+- Add `computed-queued` variant which uses an executor and queue for updates (for cases where multiple threads are writing to inputs)
+
 ### 2026-09-24
 - Support `ripley_preconnect` and `ripley_connected` callbacks
 - Use `window.addEventListener` instead of `onload` attribute

@@ -10,7 +10,10 @@
             ripley.live.atom
             ripley.live.async
             [clojure.string :as str]
-            [clojure.walk :as walk]))
+            [clojure.walk :as walk]
+            [clojure.tools.logging :as log])
+  (:import (java.util Queue)
+           (java.util.concurrent Executors ExecutorService LinkedBlockingQueue)))
 
 (defmulti to-source type)
 
@@ -101,6 +104,67 @@
       (map-indexed (fn [i s]
                      (p/listen! s (partial update! i)))
                    sources))
+     #(aget value 0)
+     listeners)))
+
+
+(def ^:private compute-queued-executor
+  (delay (Executors/newCachedThreadPool)))
+
+(defn computed-queued
+  "Returns a computed source that uses a queue for updates.
+
+  Regular computed can be updated from multiple threads
+  (like some pub/sub thread pool). This may cause out of order
+  updates.
+
+  This queued version keeps track of pending updates and applies
+  them in order using the given ExecutorService (defaults to a
+  Executors.newCachedThreadPool())
+
+  :executor      if specified, use the given executor service instead
+                 of the default.
+
+  :capacity      max number of pending updates, defaults to 64."
+  [& opts-f-sources]
+  (let [[opts f & sources] (if (and (map? (first opts-f-sources))
+                                    (fn? (second opts-f-sources)))
+                             opts-f-sources
+                             (cons {} opts-f-sources))
+
+        ^ExecutorService executor (or (:executor opts) @compute-queued-executor)
+        capacity (:capacity opts 64)
+
+        sources (mapv source sources)
+        input-values (into-array Object (map p/current-value sources))
+        value (into-array Object [(apply f input-values)])
+
+        ^Queue queue (LinkedBlockingQueue. capacity)
+
+        listeners (atom #{})
+        update! (fn computed-queued-update []
+                  (if-let [[i input-value] (.poll queue)]
+                    (do
+                      (aset input-values i input-value)
+                      (let [new-value (apply f input-values)]
+                        (when (not= (aget value 0) new-value)
+                          (aset value 0 new-value)
+                          (doseq [listener @listeners]
+                            (listener new-value)))))
+                    (log/warn "computed-queued update was scheduled, but queue is empty!")))
+        input-change!
+        (fn computed-input-changed [i input-value]
+          (if (.offer queue [i input-value])
+            (.submit executor ^Runnable update!)
+            (log/warn "computed-queued update queue is full, capacity: " capacity)))]
+
+    (->ComputedSource
+     opts f (aget value 0)
+     ;; Add listeners for all input sources
+     (doall (map-indexed
+             (fn [i s]
+               (p/listen! s (partial input-change! i)))
+             sources))
      #(aget value 0)
      listeners)))
 
