@@ -142,16 +142,18 @@
         ^Queue queue (LinkedBlockingQueue. capacity)
 
         listeners (atom #{})
+        lock (Object.)
         update! (fn computed-queued-update []
-                  (if-let [[i input-value] (.poll queue)]
-                    (do
-                      (aset input-values i input-value)
-                      (let [new-value (apply f input-values)]
-                        (when (not= (aget value 0) new-value)
-                          (aset value 0 new-value)
-                          (doseq [listener @listeners]
-                            (listener new-value)))))
-                    (log/warn "computed-queued update was scheduled, but queue is empty!")))
+                  (locking lock
+                    (if-let [[i input-value] (.poll queue)]
+                      (do
+                        (aset input-values i input-value)
+                        (let [new-value (apply f input-values)]
+                          (when (not= (aget value 0) new-value)
+                            (aset value 0 new-value)
+                            (doseq [listener @listeners]
+                              (listener new-value)))))
+                      (log/warn "computed-queued update was scheduled, but queue is empty!"))))
         input-change!
         (fn computed-input-changed [i input-value]
           (if (.offer queue [i input-value])
